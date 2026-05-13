@@ -12,13 +12,15 @@ button{background:#1e293b;color:white;border:none;padding:8px 12px;cursor:pointe
 button:hover{background:#334155}
 .panel{display:none;padding:20px}
 .panel.active{display:block}
-.card{background:#1e293b;padding:15px;margin-bottom:10px;border-radius:8px}
-input, textarea{padding:8px;margin:5px 0;width:70%}
+.card{background:#1e293b;padding:12px;margin-bottom:8px;border-radius:8px}
+input, textarea{padding:8px;margin:5px 0;width:60%}
 .badge{padding:2px 6px;border-radius:4px;font-size:10px;margin-left:6px}
 .freight{background:#2563eb}
 .govcon{background:#16a34a}
 .pipeline{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .col{background:#020617;padding:10px;border-radius:8px}
+.sel{margin-right:6px}
+.actionbar{background:#111827;padding:10px;margin-bottom:10px;border-radius:6px;display:none}
 </style>
 </head>
 
@@ -44,6 +46,11 @@ input, textarea{padding:8px;margin:5px 0;width:70%}
     <input id="fValue" placeholder="Value">
     <button onclick="addFreight()">Add</button>
   </div>
+
+  <div class="actionbar" id="actionbar">
+    <button onclick="deleteSelected()">Delete Selected</button>
+  </div>
+
   <div id="freightList"></div>
 </div>
 
@@ -55,12 +62,13 @@ input, textarea{padding:8px;margin:5px 0;width:70%}
     <input id="gValue" placeholder="Value">
     <button onclick="addGov()">Add</button>
   </div>
+
   <div id="govList"></div>
 </div>
 
 <!-- PIPELINE -->
 <div id="pipeline" class="panel">
-  <h2>Unified Pipeline</h2>
+  <h2>Pipeline</h2>
   <div class="pipeline">
     <div class="col"><h3>Lead</h3><div id="lead"></div></div>
     <div class="col"><h3>Active</h3><div id="active"></div></div>
@@ -84,81 +92,91 @@ function show(id){
   document.getElementById(id).classList.add('active');
 }
 
-// MASTER DATA
-let deals = [];
+// STORAGE
+let deals = JSON.parse(localStorage.getItem('deals')) || [];
+let selected = [];
+
+// SAVE
+function save(){
+  localStorage.setItem('deals', JSON.stringify(deals));
+}
 
 // ADD FREIGHT
 function addFreight(){
-  const title = document.getElementById('fTitle').value;
-  const value = document.getElementById('fValue').value;
+  const title = fTitle.value;
+  const value = fValue.value;
   if(!title) return;
 
   deals.push({
+    id: Date.now(),
     type:'freight',
     title,
     value,
     stage:'lead'
   });
 
-  document.getElementById('fTitle').value='';
-  document.getElementById('fValue').value='';
-
+  fTitle.value='';
+  fValue.value='';
+  save();
   renderAll();
 }
 
 // ADD GOVCON
 function addGov(){
-  const title = document.getElementById('gTitle').value;
-  const value = document.getElementById('gValue').value;
+  const title = gTitle.value;
+  const value = gValue.value;
   if(!title) return;
 
   deals.push({
+    id: Date.now(),
     type:'govcon',
     title,
     value,
     stage:'lead'
   });
 
-  document.getElementById('gTitle').value='';
-  document.getElementById('gValue').value='';
-
+  gTitle.value='';
+  gValue.value='';
+  save();
   renderAll();
 }
 
-// RENDER EVERYTHING
+// RENDER
 function renderAll(){
   renderFreight();
   renderGov();
   renderPipeline();
 }
 
-// FREIGHT LIST
+// FREIGHT
 function renderFreight(){
   const box = document.getElementById('freightList');
   box.innerHTML='';
+  selected=[];
 
   deals.filter(d=>d.type==='freight').forEach((d,i)=>{
     box.innerHTML+=`
       <div class="card">
+        <input type="checkbox" class="sel" onchange="toggle(${d.id})">
         ${d.title} - $${d.value}
         <span class="badge freight">Freight</span>
-        <button onclick="move(${i})">Next Stage</button>
+        <button onclick="move(${d.id})">Next</button>
+        <button onclick="edit(${d.id})">Edit</button>
       </div>
     `;
   });
 }
 
-// GOV LIST
+// GOV
 function renderGov(){
   const box = document.getElementById('govList');
   box.innerHTML='';
 
-  deals.filter(d=>d.type==='govcon').forEach((d,i)=>{
+  deals.filter(d=>d.type==='govcon').forEach(d=>{
     box.innerHTML+=`
       <div class="card">
         ${d.title} - $${d.value}
         <span class="badge govcon">GovCon</span>
-        <button onclick="move(${i})">Next Stage</button>
       </div>
     `;
   });
@@ -166,34 +184,64 @@ function renderGov(){
 
 // PIPELINE
 function renderPipeline(){
-  ['lead','active','closed'].forEach(stage=>{
-    document.getElementById(stage).innerHTML='';
+  ['lead','active','closed'].forEach(s=>{
+    document.getElementById(s).innerHTML='';
   });
 
-  deals.forEach((d,i)=>{
+  deals.forEach(d=>{
     document.getElementById(d.stage).innerHTML+=`
       <div class="card">
-        ${d.title}
-        <br>$${d.value}
-        <br><small>${d.type}</small>
+        ${d.title}<br>$${d.value}<br><small>${d.type}</small>
       </div>
     `;
   });
 }
 
-// MOVE STAGES
-function move(i){
-  if(deals[i].stage==='lead') deals[i].stage='active';
-  else if(deals[i].stage==='active') deals[i].stage='closed';
+// MOVE
+function move(id){
+  const d = deals.find(x=>x.id===id);
+  if(d.stage==='lead') d.stage='active';
+  else if(d.stage==='active') d.stage='closed';
+  save();
   renderAll();
 }
 
-// AI (placeholder)
-function runAI(){
-  const input = document.getElementById('aiInput').value;
-  document.getElementById('aiOutput').innerText =
-    "AI Insight: " + input + " looks promising.";
+// SELECT
+function toggle(id){
+  if(selected.includes(id)){
+    selected = selected.filter(x=>x!==id);
+  } else {
+    selected.push(id);
+  }
+  document.getElementById('actionbar').style.display =
+    selected.length ? 'block' : 'none';
 }
+
+// DELETE
+function deleteSelected(){
+  deals = deals.filter(d=>!selected.includes(d.id));
+  selected=[];
+  save();
+  renderAll();
+  document.getElementById('actionbar').style.display='none';
+}
+
+// EDIT
+function edit(id){
+  const d = deals.find(x=>x.id===id);
+  const newTitle = prompt("Edit title", d.title);
+  if(newTitle!==null) d.title=newTitle;
+  save();
+  renderAll();
+}
+
+// AI
+function runAI(){
+  aiOutput.innerText = "AI insight: looks solid.";
+}
+
+// INIT
+renderAll();
 </script>
 
 </body>
