@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FuturoFreight — Solo Edition</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0f1a;--bg2:#0f172a;--bg3:#1a2540;--bg4:#162032;--bg5:#1e2d4a;
+  --b1:rgba(255,255,255,0.06);--b2:rgba(255,255,255,0.10);--b3:rgba(255,255,255,0.16);
+  --t1:#f1f5f9;--t2:#94a3b8;--t3:#475569;--t4:#334155;
+  --blue:#2563eb;--bblue:rgba(37,99,235,0.15);--tblue:#60a5fa;
+  --green:#059669;--bgreen:rgba(5,150,105,0.12);--tgreen:#34d399;
+  --amber:#d97706;--bamber:rgba(217,119,6,0.12);--tamber:#fbbf24;
+  --red:#dc2626;--bred:rgba(220,38,38,0.12);--tred:#f87171;
+  --rmd:8px;--rlg:12px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;background:var(--bg);color:var(--t1);line-height:1.5}
+.app{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:210px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--b1);display:flex;flex-direction:column;height:100vh;position:sticky;top:0}
+.logo{padding:16px;border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;background:linear-gradient(135deg,#2563eb,#1d4ed8);border-radius:var(--rmd);display:flex;align-items:center;justify-content:center;color:white;font-size:16px;flex-shrink:0}
+.logo-name{font-size:14px;font-weight:700;color:var(--t1)}
+.logo-sub{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.08em}
+.nav{padding:8px;flex:1;overflow-y:auto}
+.nb{width:100%;display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--rmd);border:none;cursor:pointer;background:transparent;color:var(--t2);font-size:12px;text-align:left;transition:all .12s;position:relative;margin-bottom:2px}
+.nb:hover{background:var(--bg3);color:var(--t1)}
+.nb.active{background:var(--bblue);color:var(--tblue);font-weight:600}
+.nb i{font-size:15px;opacity:.85}
+.nbadge{margin-left:auto;background:var(--red);color:white;font-size:9px;font-weight:700;border-radius:99px;padding:1px 6px}
+.nav-section{font-size:9px;color:var(--t4);text-transform:uppercase;letter-spacing:.08em;padding:8px 10px 3px;font-weight:600}
+.nav-divider{height:1px;background:var(--b1);margin:4px 8px 6px}
+.nav-footer{padding:12px 16px 18px;border-top:1px solid var(--b1)}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--bblue);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--tblue);flex-shrink:0}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{background:var(--bg2);border-bottom:1px solid var(--b1);padding:0 20px;height:54px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0}
+.topbar-title{font-size:15px;font-weight:700;color:var(--t1);letter-spacing:-.2px}
+.topbar-sub{font-size:11px;color:var(--t3);margin-top:1px}
+.search{display:flex;align-items:center;background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rmd);padding:5px 11px;gap:7px;min-width:180px}
+.search input{border:none;background:transparent;outline:none;font-size:12px;color:var(--t1);width:100%}
+.search input::placeholder{color:var(--t4)}
+.btn{padding:7px 16px;background:var(--blue);color:white;border:none;border-radius:var(--rmd);font-size:12px;font-weight:600;cursor:pointer;transition:opacity .15s}
+.btn:hover{opacity:.88}
+.btn-ghost{padding:7px 14px;background:var(--bg3);color:var(--t1);border:1px solid var(--b2);border-radius:var(--rmd);font-size:12px;cursor:pointer}
+.btn-sm{padding:5px 12px;background:var(--bg4);color:var(--t2);border:1px solid var(--b2);border-radius:var(--rmd);font-size:11px;cursor:pointer}
+.btn-sm:hover{color:var(--t1);border-color:var(--b3)}
+.btn-copy{padding:6px 14px;background:var(--bblue);color:var(--tblue);border:1px solid rgba(96,165,250,.2);border-radius:var(--rmd);font-size:11px;font-weight:600;cursor:pointer}
+.content{flex:1;overflow-y:auto;padding:20px}
+.card{background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rlg);padding:16px}
+.card-title{font-size:13px;font-weight:600;color:var(--t1);margin-bottom:3px}
+.card-sub{font-size:11px;color:var(--t3);margin-bottom:12px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rlg);padding:14px 16px}
+.kpi-l{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px}
+.kpi-v{font-size:22px;font-weight:600;color:var(--t1);letter-spacing:-.5px}
+.kpi-c{font-size:11px;margin-top:3px}
+.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.th{display:grid;padding:8px 16px;background:var(--bg4);border-bottom:1px solid var(--b1);font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;gap:10px}
+.tr{display:grid;padding:11px 16px;border-bottom:1px solid var(--b1);align-items:center;gap:10px;cursor:pointer;transition:background .1s}
+.tr:hover{background:var(--bg5)}
+.tr:last-child{border-bottom:none}
+.cn{font-size:12px;font-weight:600;color:var(--t1)}
+.cs2{font-size:10px;color:var(--t3);margin-top:2px}
+.sb{display:flex;align-items:center;gap:6px}
+.st{flex:1;height:5px;background:var(--b2);border-radius:3px;overflow:hidden}
+.sf{height:100%;border-radius:3px;transition:width .5s}
+.tabs{display:flex;gap:2px;background:var(--bg4);border-radius:var(--rmd);padding:3px;width:fit-content;margin-bottom:12px;border:1px solid var(--b1)}
+.tab-btn{padding:5px 14px;border-radius:6px;border:none;cursor:pointer;font-size:11px;background:transparent;color:var(--t3);transition:all .12s}
+.tab-btn.active{background:var(--bg3);color:var(--t1);font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.taskrow{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--b1)}
+.taskrow:last-child{border-bottom:none}
+.cb{width:18px;height:18px;border-radius:4px;border:1.5px solid var(--b2);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;transition:all .15s}
+.cb.done{background:var(--bgreen);border-color:var(--tgreen);color:var(--tgreen)}
+.kanban{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px}
+.kcol{min-width:200px;flex:0 0 200px;background:var(--bg3);border-radius:var(--rlg);padding:10px;border:1px solid var(--b1)}
+.khead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--b1)}
+.sdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dc{background:var(--bg4);border:1px solid var(--b1);border-radius:var(--rmd);padding:10px;margin-bottom:7px;cursor:pointer;border-left:3px solid transparent;transition:background .12s}
+.dc:hover{background:var(--bg5)}
+.arow{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--b1)}
+.arow:last-child{border-bottom:none}
+.aicon{width:32px;height:32px;border-radius:50%;background:var(--bg4);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;color:var(--t2)}
+.back-btn{background:none;border:none;color:var(--t2);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;margin-bottom:14px;padding:0}
+.back-btn:hover{color:var(--t1)}
+.lhead{background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rlg);padding:18px;margin-bottom:12px}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.pi{background:var(--bg4);border-radius:var(--rmd);padding:10px 12px}
+.pl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
+.pv{font-size:16px;font-weight:600;color:var(--t1)}
+.alert-bar{background:var(--bamber);border:1px solid rgba(217,119,6,.25);border-radius:var(--rmd);padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--tamber)}
+/* Load Analyzer */
+.la-grid{display:grid;grid-template-columns:390px 1fr;gap:16px;align-items:start}
+.la-section{font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--b1)}
+.la-section:first-child{margin-top:0;border-top:none;padding-top:0}
+.fg{margin-bottom:10px}
+.fl{font-size:10px;color:var(--t2);margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:.05em}
+.fi{width:100%;padding:8px 11px;background:var(--bg4);border:1px solid var(--b2);border-radius:var(--rmd);font-size:13px;color:var(--t1);outline:none;transition:border-color .15s;-webkit-appearance:none}
+.fi:focus{border-color:var(--blue)}
+.fi::placeholder{color:var(--t4)}
+.fi-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fi-pre{position:relative}
+.fi-pre .fi{padding-left:22px}
+.fi-sym{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--t3);font-size:12px;pointer-events:none}
+.state-row{display:grid;grid-template-columns:1fr 18px 1fr;gap:6px;align-items:center}
+.arr-mid{text-align:center;color:var(--t3);font-size:13px;margin-top:16px}
+.btn-analyze{width:100%;padding:11px;background:var(--blue);color:white;border:none;border-radius:var(--rmd);font-size:14px;font-weight:600;cursor:pointer;transition:opacity .15s;margin-top:4px}
+.btn-analyze:hover{opacity:.88}
+.la-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:260px;color:var(--t3);text-align:center;padding:40px}
+.v-banner{border-radius:var(--rlg);padding:18px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.v-label{font-size:21px;font-weight:700;letter-spacing:-.3px}
+.v-sub{font-size:12px;margin-top:2px;opacity:.8}
+.g-ring{width:54px;height:54px;flex-shrink:0;position:relative}
+.g-ring svg{transform:rotate(-90deg)}
+.g-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700}
+.m-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.mc{background:var(--bg4);border-radius:var(--rmd);padding:12px}
+.mc-l{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.mc-v{font-size:18px;font-weight:600;letter-spacing:-.3px}
+.mc-s{font-size:10px;color:var(--t3);margin-top:2px}
+.mkt-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--b1)}
+.mkt-row:last-child{border-bottom:none}
+.mkt-lbl{font-size:12px;color:var(--t2);min-width:140px}
+.mkt-bar{flex:1;position:relative;height:6px}
+.mkt-bg{height:6px;background:var(--b2);border-radius:3px}
+.mkt-fill{height:6px;border-radius:3px;position:absolute;top:0;left:0;transition:width .6s}
+.mkt-val{font-size:12px;font-weight:600;min-width:60px;text-align:right}
+.pay-track{position:relative;height:8px;background:var(--b2);border-radius:4px;margin:8px 0}
+.pay-range{position:absolute;height:8px;border-radius:4px;background:var(--bblue)}
+.pay-m{position:absolute;top:-4px;width:3px;height:16px;border-radius:2px;transform:translateX(-50%)}
+.pay-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--t3)}
+.flag{display:flex;align-items:flex-start;gap:8px;padding:9px 12px;border-radius:var(--rmd);margin-bottom:6px;border:1px solid transparent}
+.flag:last-child{margin-bottom:0}
+.flag i{font-size:14px;flex-shrink:0;margin-top:1px}
+.flag-txt{font-size:12px;line-height:1.4}
+.flag-danger{background:var(--bred);border-color:rgba(248,113,113,.2);color:var(--tred)}
+.flag-warn{background:var(--bamber);border-color:rgba(251,191,36,.2);color:var(--tamber)}
+.flag-good{background:var(--bgreen);border-color:rgba(52,211,153,.2);color:var(--tgreen)}
+.q-box{background:var(--bg4);border:1px solid var(--b2);border-radius:var(--rmd);padding:14px;font-family:'Courier New',monospace;font-size:11px;color:var(--t2);line-height:1.9;white-space:pre-wrap;word-break:break-word}
+.hi-row{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg4);border-radius:var(--rmd);margin-bottom:5px;cursor:pointer;transition:background .12s;border:1px solid transparent}
+.hi-row:hover{background:var(--bg5);border-color:var(--b2)}
+.hi-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.fade-in{animation:fi .25s ease}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--b2);border-radius:3px}
+.sel-cb{width:16px;height:16px;border-radius:3px;border:1.5px solid var(--b2);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;transition:all .15s;background:transparent}
+.sel-cb.checked{background:var(--blue);border-color:var(--blue);color:white}
+.tr.selected{background:rgba(37,99,235,0.10)!important;border-left:2px solid var(--blue)}
+.sel-bar{display:flex;align-items:center;gap:8px;padding:7px 14px;background:rgba(37,99,235,0.12);border:1px solid rgba(37,99,235,0.25);border-radius:var(--rmd);margin-bottom:10px;font-size:12px;color:var(--tblue)}
+.sel-bar button{padding:4px 12px;background:var(--bred);color:var(--tred);border:1px solid rgba(248,113,113,.25);border-radius:var(--rmd);font-size:11px;font-weight:600;cursor:pointer}
+.sel-bar button:hover{background:rgba(220,38,38,.25)}
+.set-field{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--b1);align-items:center;gap:10px}
+.set-field:last-child{border-bottom:none}
+.set-label{font-size:12px;color:var(--t2);flex-shrink:0;min-width:110px}
+.set-value{font-size:12px;font-weight:600;color:var(--t1);flex:1;text-align:right}
+.set-input{font-size:12px;color:var(--t1);background:var(--bg4);border:1px solid var(--b2);border-radius:var(--rmd);padding:5px 9px;outline:none;flex:1;text-align:right}
+.set-input:focus{border-color:var(--blue)}
+.set-edit-btn{font-size:10px;color:var(--tblue);background:var(--bblue);border:1px solid rgba(96,165,250,.2);border-radius:var(--rmd);padding:3px 10px;cursor:pointer;font-weight:600;white-space:nowrap}
+.set-save-btn{font-size:10px;color:var(--tgreen);background:var(--bgreen);border:1px solid rgba(52,211,153,.2);border-radius:var(--rmd);padding:3px 10px;cursor:pointer;font-weight:600;white-space:nowrap}
+/* ── CHECKLIST ── */
+.cl-section{background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rlg);margin-bottom:10px;overflow:hidden}
+.cl-header{display:flex;align-items:center;gap:10px;padding:13px 16px;cursor:pointer;user-select:none}
+.cl-header:hover{background:var(--bg4)}
+.cl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.cl-title{font-size:13px;font-weight:600;color:var(--t1);flex:1}
+.cl-progress{font-size:10px;color:var(--t3)}
+.cl-chevron{font-size:14px;color:var(--t3);transition:transform .2s}
+.cl-chevron.open{transform:rotate(90deg)}
+.cl-items{padding:0 16px 12px}
+.cl-item{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--b1)}
+.cl-item:last-child{border-bottom:none}
+.cl-cb{width:18px;height:18px;border-radius:4px;border:1.5px solid var(--b2);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;transition:all .15s;margin-top:1px}
+.cl-cb.done{background:var(--bgreen);border-color:var(--tgreen);color:var(--tgreen)}
+.cl-cb.req{border-color:rgba(251,191,36,.5)}
+.cl-info{flex:1}
+.cl-item-title{font-size:12px;font-weight:600;color:var(--t1)}
+.cl-item-detail{font-size:11px;color:var(--t2);margin-top:2px;line-height:1.5}
+.cl-cost{font-size:10px;color:var(--tgreen);font-weight:600;flex-shrink:0;margin-top:1px}
+.cl-req-badge{font-size:9px;background:rgba(251,191,36,.15);color:var(--tamber);padding:1px 6px;border-radius:99px;font-weight:600;margin-left:6px}
+/* ── OUTREACH ── */
+.ou-mode-btn{padding:7px 14px;border-radius:var(--rmd);border:1px solid var(--b2);background:transparent;color:var(--t2);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:7px;transition:all .12s}
+.ou-mode-btn:hover{background:var(--bg3);color:var(--t1)}
+.ou-mode-btn.active{background:var(--bblue);border-color:var(--tblue);color:var(--tblue);font-weight:600}
+.ou-script{background:var(--bg4);border:1px solid var(--b2);border-radius:var(--rmd);padding:16px;font-size:12px;color:var(--t1);line-height:1.8;white-space:pre-wrap;font-family:-apple-system,sans-serif;min-height:200px}
+/* ── QUOTING ── */
+.qt-quote-display{background:var(--bg4);border:1px solid var(--b2);border-radius:var(--rmd);padding:16px;font-family:'Courier New',monospace;font-size:11px;color:var(--t1);line-height:1.9;white-space:pre-wrap}
+.qt-hist-row{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg4);border-radius:var(--rmd);margin-bottom:5px;cursor:pointer;border:1px solid transparent;transition:all .12s}
+.qt-hist-row:hover{background:var(--bg5);border-color:var(--b2)}
+@media(max-width:900px){.la-grid{grid-template-columns:1fr}.m-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="sidebar">
+  <div class="logo">
+    <div class="logo-icon"><i class="ti ti-truck"></i></div>
+    <div><div class="logo-name">FuturoFreight</div><div class="logo-sub">Solo Edition</div></div>
+  </div>
+  <div class="nav" id="nav"></div>
+  <div class="nav-footer">
+    <div style="display:flex;align-items:center;gap:9px">
+      <div class="avatar">ME</div>
+      <div><div style="font-size:12px;font-weight:600;color:var(--t1)">You</div><div style="font-size:10px;color:var(--t3)">Owner · National</div></div>
+    </div>
+  </div>
+</div>
+<div class="main">
+  <div class="topbar">
+    <div><div class="topbar-title" id="pt">Command Center</div><div class="topbar-sub" id="ps">Your national freight operation</div></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="search"><i class="ti ti-search" style="font-size:13px;color:var(--t3)"></i><input placeholder="Search leads..."></div>
+      <button class="btn">+ Add Lead</button>
+    </div>
+  </div>
+  <div class="content" id="content"></div>
+</div>
+</div>
+<script>
+// ============================================================
+// CRM DATA
+// ============================================================
+const S=[
+  {id:'s1',co:'Midwest Industrial Supply',st:'qualified',sg:'proposal',sc:87,ind:'Manufacturing',ph:'(312) 555-0142',em:'logistics@midwest.com',city:'Chicago',sta:'IL',src:'cold_call',fr:['dry_van','flatbed'],vol:45,sp:820000,mg:18.4,ld:12,rv:94200,tg:['high-value','recurring'],lc:Date.now()-3*864e5,fu:Date.now()+864e5},
+  {id:'s2',co:'Lone Star Retail Group',st:'negotiation',sg:'negotiation',sc:92,ind:'Retail',ph:'(214) 555-0287',em:'freight@lonestar.com',city:'Dallas',sta:'TX',src:'referral',fr:['dry_van','reefer'],vol:120,sp:2400000,mg:0,ld:0,rv:0,tg:['enterprise','priority'],lc:Date.now()-864e5,fu:Date.now()+2*864e5},
+  {id:'s3',co:'Pacific Fresh Foods',st:'proposal',sg:'proposal',sc:74,ind:'Food & Bev',ph:'(503) 555-0334',em:'ops@pacificfresh.com',city:'Portland',sta:'OR',src:'inbound',fr:['reefer'],vol:28,sp:390000,mg:21.5,ld:5,rv:38500,tg:['reefer','high-margin'],lc:Date.now()-5*864e5,fu:Date.now()-864e5},
+  {id:'s4',co:'AutoParts Direct LLC',st:'contacted',sg:'discovery',sc:61,ind:'Automotive',ph:'(248) 555-0198',em:'ship@autoparts.com',city:'Detroit',sta:'MI',src:'linkedin',fr:['dry_van','ltl'],vol:15,sp:185000,mg:0,ld:0,rv:0,tg:['automotive'],lc:Date.now()-8*864e5,fu:Date.now()+3*864e5},
+  {id:'s5',co:'Southeast Building Materials',st:'new',sg:'prospecting',sc:45,ind:'Construction',ph:'(404) 555-0421',em:'logistics@sebuild.com',city:'Atlanta',sta:'GA',src:'cold_call',fr:['flatbed','step_deck'],vol:8,sp:95000,mg:0,ld:0,rv:0,tg:['flatbed'],lc:null,fu:Date.now()+864e5},
+  {id:'s6',co:'Great Lakes Chemical Co',st:'won',sg:'active',sc:95,ind:'Chemical',ph:'(216) 555-0556',em:'logistics@greatlakes.com',city:'Cleveland',sta:'OH',src:'referral',fr:['tanker','dry_van'],vol:65,sp:1850000,mg:16.8,ld:48,rv:412000,tg:['enterprise','anchor'],lc:Date.now()-2*864e5,fu:Date.now()+7*864e5},
+  {id:'s7',co:'Rocky Mountain Produce',st:'qualified',sg:'discovery',sc:79,ind:'Agriculture',ph:'(720) 555-0812',em:'ops@rmtproduce.com',city:'Denver',sta:'CO',src:'cold_call',fr:['reefer','flatbed'],vol:35,sp:520000,mg:0,ld:0,rv:0,tg:['reefer'],lc:Date.now()-4*864e5,fu:Date.now()+864e5},
+];
+const T=[
+  {id:'t1',ti:'Follow up on rate proposal',pr:'urgent',dn:false,du:Date.now()-864e5,co:'Midwest Industrial Supply'},
+  {id:'t2',ti:'Re-engage Pacific Fresh — proposal overdue',pr:'urgent',dn:false,du:Date.now()-2*864e5,co:'Pacific Fresh Foods'},
+  {id:'t3',ti:'Initial call — Rocky Mountain Produce',pr:'high',dn:false,du:Date.now()+864e5,co:'Rocky Mountain Produce'},
+  {id:'t4',ti:'Onboarding docs — Great Lakes Chemical',pr:'high',dn:false,du:Date.now()+2*864e5,co:'Great Lakes Chemical Co'},
+  {id:'t5',ti:'Cold outreach — Southeast Building Materials',pr:'medium',dn:false,du:Date.now()+3*864e5,co:'Southeast Building Materials'},
+  {id:'t6',ti:'Quarterly check-in call',pr:'medium',dn:true,du:Date.now()-3*864e5,co:'Great Lakes Chemical Co'},
+];
+const STGS=[
+  {id:'prospecting',lb:'Prospecting',cl:'#888780'},
+  {id:'initial_contact',lb:'Initial Contact',cl:'#378ADD'},
+  {id:'discovery',lb:'Discovery',cl:'#7F77DD'},
+  {id:'proposal',lb:'Proposal Sent',cl:'#BA7517'},
+  {id:'negotiation',lb:'Negotiating',cl:'#E24B4A'},
+  {id:'active',lb:'Active Account',cl:'#1D9E75'},
+];
+const CA=[
+  {co:'Eagle Transport LLC',mc:'MC-294821',sta:'IL',fr:['dry_van'],tr:12,ot:94.8,ac:82,ld:64,st:'preferred'},
+  {co:'Lone Star Carriers Inc',mc:'MC-573019',sta:'TX',fr:['dry_van','reefer'],tr:28,ot:96.1,ac:79,ld:112,st:'preferred'},
+  {co:'Pacific Reefer Express',mc:'MC-829341',sta:'CA',fr:['reefer'],tr:8,ot:91.5,ac:71,ld:31,st:'active'},
+  {co:'Northern Flatbed LLC',mc:'MC-461820',sta:'MI',fr:['flatbed','step_deck'],tr:6,ot:89.2,ac:68,ld:24,st:'active'},
+  {co:'Mountain State Tankers',mc:'MC-902847',sta:'CO',fr:['tanker'],tr:4,ot:93.0,ac:75,ld:18,st:'active'},
+];
+// ============================================================
+// LOAD ANALYZER DATA
+// ============================================================
+const EQ={
+  dry_van:{n:'Dry Van',mr:2.20,tr:2.75,xr:3.20,mm:12,tm:18,xm:25,cp:0.72},
+  reefer:{n:'Reefer',mr:2.80,tr:3.40,xr:4.00,mm:15,tm:20,xm:28,cp:0.74},
+  flatbed:{n:'Flatbed',mr:2.50,tr:3.20,xr:4.00,mm:14,tm:20,xm:27,cp:0.73},
+  step_deck:{n:'Step Deck',mr:2.80,tr:3.50,xr:4.50,mm:16,tm:22,xm:30,cp:0.74},
+  lowboy:{n:'Lowboy',mr:4.50,tr:6.00,xr:8.50,mm:20,tm:28,xm:38,cp:0.72},
+  tanker:{n:'Tanker',mr:3.00,tr:3.80,xr:5.00,mm:15,tm:22,xm:30,cp:0.74},
+  intermodal:{n:'Intermodal',mr:1.80,tr:2.40,xr:3.00,mm:10,tm:15,xm:20,cp:0.78},
+  ltl:{n:'LTL',mr:3.00,tr:4.00,xr:5.50,mm:20,tm:28,xm:38,cp:0.68},
+  partial:{n:'Partial',mr:2.50,tr:3.20,xr:4.20,mm:15,tm:22,xm:30,cp:0.71},
+  expedited:{n:'Expedited',mr:3.50,tr:4.50,xr:6.00,mm:18,tm:25,xm:35,cp:0.70},
+  heavy_haul:{n:'Heavy Haul',mr:4.00,tr:6.00,xr:8.00,mm:18,tm:25,xm:35,cp:0.72},
+  power_only:{n:'Power Only',mr:2.00,tr:2.50,xr:3.20,mm:12,tm:18,xm:25,cp:0.76},
+};
+const CORR={'IL-TX':85,'TX-CA':82,'CA-TX':80,'GA-TX':88,'OH-TX':84,'MI-GA':78,'TX-FL':83,'CA-IL':79,'WI-TX':80,'PA-FL':82,'NC-TX':77,'MN-TX':78,'IN-TX':82,'KY-TX':80,'TN-TX':83,'OH-GA':76,'IL-GA':81,'TX-IL':84,'FL-TX':85,'CA-OR':72,'OR-CA':74,'CO-TX':76,'AZ-CA':70,'TX-AZ':72,'GA-FL':71,'IL-OH':78,'OH-IL':77,'TX-NY':74,'NY-TX':72,'VA-TX':78,'SC-TX':76,'AL-TX':79,'MS-TX':77,'MO-TX':81,'AR-TX':80,'OK-TX':82};
+const SEAS={dry_van:{q1:0.95,q2:1.05,q3:1.02,q4:1.12},reefer:{q1:0.88,q2:1.18,q3:1.22,q4:0.94},flatbed:{q1:0.90,q2:1.20,q3:1.10,q4:0.88},tanker:{q1:1.00,q2:1.02,q3:1.03,q4:1.00},expedited:{q1:1.06,q2:1.00,q3:0.99,q4:1.18},ltl:{q1:0.96,q2:1.06,q3:1.03,q4:1.10}};
+const DH={'IL':0.12,'TX':0.10,'CA':0.14,'GA':0.11,'OH':0.13,'FL':0.15,'NY':0.16,'PA':0.12,'MI':0.13,'CO':0.18,'OR':0.20,'WA':0.19,'MN':0.16,'WI':0.14,'IN':0.12,'TN':0.11,'NC':0.13,'VA':0.12,'SC':0.14,'AL':0.12,'MS':0.13,'MO':0.12,'AR':0.13,'OK':0.11,'KY':0.12,'AZ':0.16};
+const MPG={dry_van:6.5,reefer:5.8,flatbed:6.0,step_deck:5.8,tanker:5.5,expedited:7.0,heavy_haul:4.5,lowboy:4.2,ltl:7.0,partial:6.2,intermodal:6.8,power_only:6.5};
+const DIESEL=3.85;
+let laHistory=[],laResult=null;
+// ============================================================
+// SHARED STATE
+// ============================================================
+const NAV=[
+  {sec:'CRM'},
+  {id:'dashboard',ic:'ti-layout-dashboard',lb:'Dashboard'},
+  {id:'leads',ic:'ti-users',lb:'Leads'},
+  {id:'pipeline',ic:'ti-layout-kanban',lb:'Pipeline'},
+  {id:'analytics',ic:'ti-chart-bar',lb:'Analytics'},
+  {id:'carriers',ic:'ti-truck-delivery',lb:'Carriers'},
+  {id:'tasks',ic:'ti-checkbox',lb:'Tasks',badge:true},
+  {sec:'TOOLS'},
+  {id:'loadtool',ic:'ti-bolt',lb:'Load Analyzer'},
+  {sec:'ACCOUNT'},
+  {id:'settings',ic:'ti-settings',lb:'Settings'},
+  {sec:'START HERE'},
+  {id:'checklist',ic:'ti-clipboard-check',lb:'Broker Checklist'},
+  {id:'outreach',ic:'ti-speakerphone',lb:'Outreach Scripts'},
+  {id:'quoting',ic:'ti-file-dollar',lb:'Rate Quoting'},
+];
+const PM={
+  dashboard:{t:'Command Center',s:'Your national freight operation at a glance'},
+  leads:{t:'Lead Management',s:S.length+' accounts'},
+  pipeline:{t:'Sales Pipeline',s:'$4.28M active pipeline'},
+  analytics:{t:'Analytics',s:'Performance insights'},
+  carriers:{t:'Carrier Network',s:CA.length+' carriers'},
+  tasks:{t:'Tasks',s:'Your daily action queue'},
+  loadtool:{t:'Load Analyzer',s:'Full margin, RPM, market, and carrier analysis'},
+  settings:{t:'Settings',s:'Brokerage configuration'},
+  checklist:{t:'Broker Checklist',s:'Every step to get your authority and go operational'},
+  outreach:{t:'Outreach Scripts',s:'Cold call, email, LinkedIn, and voicemail templates'},
+  quoting:{t:'Rate Quoting',s:'Build and send professional rate quotes to shippers'},
+};
+const SC_MAP={new:{bg:'rgba(37,99,235,.15)',tx:'#60a5fa'},contacted:{bg:'rgba(124,58,237,.15)',tx:'#a78bfa'},qualified:{bg:'rgba(217,119,6,.12)',tx:'#fbbf24'},proposal:{bg:'rgba(249,115,22,.15)',tx:'#fb923c'},negotiation:{bg:'rgba(220,38,38,.12)',tx:'#f87171'},won:{bg:'rgba(5,150,105,.12)',tx:'#34d399'},lost:{bg:'rgba(71,85,105,.15)',tx:'#64748b'}};
+const PC={urgent:'var(--tred)',high:'var(--tamber)',medium:'var(--tblue)',low:'var(--t3)'};
+let page='dashboard',sel=null,done=new Set();
+let selLeads=new Set(),selCarriers=new Set(),selTasks=new Set();
+let orgSettings={name:'FuturoFreight LLC',mc:'',email:'you@youremail.com'};
+let settingsEditing=false;
+
+// ============================================================
+// PERSISTENCE ENGINE — auto-save/load via localStorage
+// ============================================================
+const LS_KEY = 'futurofreight_v1';
+
+function saveAll() {
+  try {
+    const data = {
+      S,
+      T,
+      CA,
+      done: [...done],
+      orgSettings,
+      qtHistory,
+      qtSeq,
+      laHistory: (laHistory||[]).slice(0, 20),
+      clDone: [...clDone],
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(LS_KEY, JSON.stringify(data));
+  } catch(e) {
+    console.warn('FuturoFreight save failed:', e.message);
+  }
+}
+
+function loadAll() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (!data || !data.S) return false;
+    // Restore arrays
+    S.length = 0; data.S.forEach(x => S.push(x));
+    T.length = 0; data.T.forEach(x => T.push(x));
+    CA.length = 0; data.CA.forEach(x => CA.push(x));
+    // Restore Sets
+    done.clear(); (data.done||[]).forEach(x => done.add(x));
+    clDone.clear(); (data.clDone||[]).forEach(x => clDone.add(x));
+    // Restore objects/primitives
+    if (data.orgSettings) {
+      orgSettings.name  = data.orgSettings.name  || orgSettings.name;
+      orgSettings.mc    = data.orgSettings.mc    || orgSettings.mc;
+      orgSettings.email = data.orgSettings.email || orgSettings.email;
+    }
+    if (data.qtHistory) { qtHistory.length=0; data.qtHistory.forEach(x=>qtHistory.push(x)); }
+    if (data.qtSeq) qtSeq = data.qtSeq;
+    if (data.laHistory) { laHistory.length=0; data.laHistory.forEach(x=>laHistory.push(x)); }
+    return true;
+  } catch(e) {
+    console.warn('FuturoFreight load failed:', e.message);
+    return false;
+  }
+}
+
+function clearSave() {
+  if (!confirm('Clear all saved data and reset to defaults? This cannot be undone.')) return;
+  localStorage.removeItem(LS_KEY);
+  location.reload();
+}
+
+function getSaveStatus() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    return data.savedAt ? new Date(data.savedAt) : null;
+  } catch(e) { return null; }
+}
+// ============================================================
+// UTILITIES
+// ============================================================
+const $m=n=>n>=1e6?'$'+(n/1e6).toFixed(1)+'M':n>=1e3?'$'+(n/1e3).toFixed(0)+'K':'$'+Math.round(n).toLocaleString();
+const $p=n=>Number(n).toFixed(1)+'%';
+const $a=ms=>{if(!ms)return'Never';const d=Math.floor((Date.now()-ms)/864e5);return d===0?'Today':d===1?'Yesterday':d<7?d+'d ago':d<30?Math.floor(d/7)+'w ago':Math.floor(d/30)+'mo ago';};
+const $u=ms=>{if(!ms)return{l:'—',ov:false};const d=Math.floor((ms-Date.now())/864e5);return d<0?{l:Math.abs(d)+'d overdue',ov:true}:d===0?{l:'Today',ov:false}:d===1?{l:'Tomorrow',ov:false}:{l:'In '+d+'d',ov:false};};
+const $sc=s=>s>=80?'var(--tgreen)':s>=60?'var(--tamber)':'var(--tred)';
+const $sb=s=>{const c=SC_MAP[s]||SC_MAP.new;return`<span class="badge" style="background:${c.bg};color:${c.tx}">${s}</span>`;};
+const $ov=()=>T.filter(t=>!t.dn&&!done.has(t.id)&&t.du<Date.now()).length;
+const $q=()=>{const m=new Date().getMonth();return m<3?'q1':m<6?'q2':m<9?'q3':'q4';};
+const $qn=()=>{const m=new Date().getMonth();return m<3?1:m<6?2:m<9?3:4;};
+const tagoT=ts=>{const s=Math.floor((Date.now()-ts)/1000);return s<60?'just now':s<3600?Math.floor(s/60)+'m ago':Math.floor(s/3600)+'h ago';};
+// ============================================================
+// NAV RENDER
+// ============================================================
+function rNav(){
+  const ov=$ov();
+  document.getElementById('nav').innerHTML=NAV.map(n=>{
+    if(n.sec)return`<div class="nav-section">${n.sec}</div>`;
+    return`<button class="nb${page===n.id?' active':''}" onclick="go('${n.id}')"><i class="ti ${n.ic}"></i>${n.lb}${n.badge&&ov>0?`<span class="nbadge">${ov}</span>`:''}</button>`;
+  }).join('');
+}
+function go(p){page=p;sel=null;const m=PM[p]||{t:p,s:''};document.getElementById('pt').textContent=m.t;document.getElementById('ps').textContent=m.s;rNav();rPage();}
+function rPage(){if(sel){rDetail();return;}({dashboard:rDash,leads:rLeads,pipeline:rPipe,analytics:rAnalytics,carriers:rCarriers,tasks:rTasks,loadtool:rLoadTool,settings:rSettings,checklist:rChecklist,outreach:rOutreach,quoting:rQuoting})[page]?.();}
+// ============================================================
+// CRM VIEWS
+// ============================================================
+function rDash(){
+  const ov=S.filter(s=>s.fu&&s.fu<Date.now()).length,oc=$ov();
+  const rd=[38200,42800,35600,51200,47900,44100,58300,52700,49800,63400,71200];
+  const mx=Math.max(...rd);
+  document.getElementById('content').innerHTML=`
+  <div class="kpi-grid">${[['Pipeline Value',$m(4280000),'+12.4%','var(--tgreen)'],['Revenue (30d)',$m(524300),'+8.7%','var(--tgreen)'],['Avg Margin',$p(19.2),'+1.4%','var(--tgreen)'],['Active Leads','42','+5','var(--tgreen)'],['Loads (30d)','198','+11.3%','var(--tgreen)'],['Conversion',$p(24.3),'-2.1%','var(--tred)']].map(([l,v,c,col])=>`<div class="kpi"><div class="kpi-l">${l}</div><div class="kpi-v">${v}</div><div class="kpi-c" style="color:${col}">${c}</div></div>`).join('')}</div>
+  ${ov>0||oc>0?`<div class="alert-bar"><i class="ti ti-alert-triangle" style="font-size:16px;flex-shrink:0"></i><span><strong>${ov} overdue follow-up${ov!==1?'s':''}</strong> and <strong>${oc} overdue task${oc!==1?'s':''}</strong> need attention today.</span></div>`:''}
+  <div class="g2">
+    <div class="card"><div class="card-title">Revenue Trend</div><div class="card-sub">Last 11 data points</div><div style="display:flex;align-items:flex-end;gap:3px;height:90px">${rd.map((v,i)=>`<div style="flex:1;height:${Math.round((v/mx)*85)}px;background:${i===rd.length-1?'var(--blue)':'rgba(59,130,246,.28)'};border-radius:2px 2px 0 0;min-height:3px" title="$${(v/1000).toFixed(0)}K"></div>`).join('')}</div></div>
+    <div class="card"><div class="card-title">AI Insights</div><div class="card-sub">3 actions recommended</div>
+      <div style="background:var(--bred);border:1px solid rgba(248,113,113,.2);border-radius:var(--rmd);padding:10px;margin-bottom:7px"><div style="font-size:11px;font-weight:600;color:var(--tred)">Pacific Fresh — proposal overdue 5 days</div><div style="font-size:11px;color:var(--t2);margin-top:2px">74% chance competitor wins after day 7. Call today.</div></div>
+      <div style="background:var(--bgreen);border:1px solid rgba(52,211,153,.2);border-radius:var(--rmd);padding:10px;margin-bottom:7px"><div style="font-size:11px;font-weight:600;color:var(--tgreen)">Lone Star at 92 — close window open</div><div style="font-size:11px;color:var(--t2);margin-top:2px">High close probability this week. Strike now.</div></div>
+      <div style="background:var(--bblue);border:1px solid rgba(96,165,250,.2);border-radius:var(--rmd);padding:10px"><div style="font-size:11px;font-weight:600;color:var(--tblue)">Reefer RPM up 14% nationally</div><div style="font-size:11px;color:var(--t2);margin-top:2px">OR→CA and TX→CA trending. Run the numbers in Load Analyzer.</div></div>
+    </div>
+  </div>
+  <div class="g2">
+    <div class="card"><div class="card-title">Top Lanes</div><div class="card-sub">By revenue this month</div>${[['Chicago IL → Dallas TX','Dry Van',28,228400,18.2,2.92],['Atlanta GA → Dallas TX','Dry Van',22,178200,21.5,2.87],['Cleveland OH → Houston TX','Tanker',18,161300,19.8,3.04],['Portland OR → Los Angeles CA','Reefer',15,98500,23.2,3.41],['Detroit MI → Atlanta GA','Flatbed',12,89400,17.3,2.74]].map(([l,eq,ld,rv,m,rpm])=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--b1);align-items:center"><div><div style="font-size:11px;font-weight:600;color:var(--t1)">${l}</div><div style="font-size:10px;color:var(--t3)">${eq} · ${ld} loads</div></div><div style="text-align:right"><div style="font-size:12px;font-weight:600;color:var(--t1)">${$m(rv)}</div><div style="font-size:10px;color:${m>=20?'var(--tgreen)':'var(--tamber)'}">${$p(m)} · $${rpm.toFixed(2)}/mi</div></div></div>`).join('')}</div>
+    <div class="card"><div class="card-title">Next Actions</div><div class="card-sub">Priority queue</div>${T.filter(t=>!t.dn&&!done.has(t.id)).slice(0,5).map(t=>{const du=$u(t.du);return`<div class="taskrow"><div class="cb" onclick="tog('${t.id}')"></div><div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.ti}</div><div style="font-size:10px;color:var(--t3)">${t.co}</div></div><span style="font-size:10px;color:${du.ov?'var(--tred)':'var(--t3)'};font-weight:${du.ov?600:400};flex-shrink:0">${du.l}</span></div>`;}).join('')}</div>
+  </div>`;
+}
+function rLeads(f='all'){
+  selLeads.clear();
+  document.getElementById('content').innerHTML=`
+  <div style="display:flex;gap:6px;margin-bottom:12px;justify-content:space-between;align-items:center;flex-wrap:wrap">
+    <div style="display:flex;gap:5px;flex-wrap:wrap">${['all','new','contacted','qualified','proposal','negotiation','won'].map(x=>`<button onclick="rLeads('${x}')" style="padding:4px 13px;border-radius:99px;border:1px solid ${x===f?'var(--blue)':'var(--b2)'};background:${x===f?'var(--bblue)':'transparent'};color:${x===f?'var(--tblue)':'var(--t2)'};font-size:11px;cursor:pointer">${x==='all'?'All':x.charAt(0).toUpperCase()+x.slice(1)}</button>`).join('')}</div>
+    <select onchange="sortL(this.value)" style="font-size:11px;padding:5px 8px;border-radius:var(--rmd);border:1px solid var(--b2);background:var(--bg3);color:var(--t1)"><option value="sc">Sort: Score</option><option value="rv">Sort: Revenue</option><option value="co">Sort: Name</option></select>
+  </div>
+  <div id="lead-sel-bar"></div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="th" style="grid-template-columns:30px 2fr 110px 70px 90px 95px 80px">
+      <div><div class="sel-cb" id="lead-all-cb" onclick="toggleAllLeads('${f}')"></div></div>
+      <div>Company</div><div>Status</div><div>Score</div><div>Equipment</div><div>Revenue</div><div>Follow-up</div>
+    </div>
+    <div id="ll">${lRows(f==='all'?S:S.filter(s=>s.st===f),'${f}')}</div>
+  </div>`;
+}
+function lRows(list,f){
+  return list.map(s=>{
+    const du=$u(s.fu),isSel=selLeads.has(s.id);
+    return`<div class="tr${isSel?' selected':''}" style="grid-template-columns:30px 2fr 110px 70px 90px 95px 80px">
+      <div onclick="event.stopPropagation();toggleSelLead('${s.id}','${f||'all'}')">
+        <div class="sel-cb${isSel?' checked':''}">${isSel?'<i class="ti ti-check" style="font-size:9px"></i>':''}</div>
+      </div>
+      <div onclick="openL('${s.id}')"><div class="cn">${s.co}</div><div class="cs2">${s.city}, ${s.sta} · ${s.ind}</div></div>
+      <div onclick="openL('${s.id}')">${$sb(s.st)}</div>
+      <div onclick="openL('${s.id}')"><div class="sb"><div class="st"><div class="sf" style="width:${s.sc}%;background:${$sc(s.sc)}"></div></div><span style="font-size:10px;font-weight:600;color:${$sc(s.sc)}">${s.sc}</span></div></div>
+      <div onclick="openL('${s.id}')">${s.fr.slice(0,2).map(t=>`<span style="font-size:9px;background:var(--bblue);color:var(--tblue);padding:2px 5px;border-radius:4px;margin-right:2px">${t.replace('_',' ')}</span>`).join('')}</div>
+      <div onclick="openL('${s.id}')" style="font-size:11px;font-weight:600;color:${s.rv>0?'var(--t1)':'var(--t3)'}">${s.rv>0?$m(s.rv):'—'}</div>
+      <div onclick="openL('${s.id}')" style="font-size:10px;color:${du.ov?'var(--tred)':'var(--t2)'};font-weight:${du.ov?600:400}">${du.l}</div>
+    </div>`;
+  }).join('');
+}
+function toggleSelLead(id,f){
+  if(selLeads.has(id))selLeads.delete(id);else selLeads.add(id);
+  updateLeadSelBar(f);
+  const list=f==='all'?S:S.filter(s=>s.st===f);
+  const el=document.getElementById('ll');if(el)el.innerHTML=lRows(list,f);
+  const cb=document.getElementById('lead-all-cb');
+  if(cb){const a=list.length>0&&list.every(s=>selLeads.has(s.id));cb.className='sel-cb'+(a?' checked':'');cb.innerHTML=a?'<i class="ti ti-check" style="font-size:9px"></i>':'';}
+}
+function toggleAllLeads(f){
+  const list=f==='all'?S:S.filter(s=>s.st===f);
+  const allSel=list.length>0&&list.every(s=>selLeads.has(s.id));
+  list.forEach(s=>allSel?selLeads.delete(s.id):selLeads.add(s.id));
+  updateLeadSelBar(f);
+  const el=document.getElementById('ll');if(el)el.innerHTML=lRows(list,f);
+  const cb=document.getElementById('lead-all-cb');
+  if(cb){const n=!allSel&&list.length>0;cb.className='sel-cb'+(n?' checked':'');cb.innerHTML=n?'<i class="ti ti-check" style="font-size:9px"></i>':'';}
+}
+function updateLeadSelBar(f){
+  const el=document.getElementById('lead-sel-bar');if(!el)return;
+  if(selLeads.size===0){el.innerHTML='';return;}
+  el.innerHTML=`<div class="sel-bar"><i class="ti ti-checkbox" style="font-size:14px"></i><span><strong>${selLeads.size}</strong> lead${selLeads.size!==1?'s':''} selected</span><button onclick="deleteLeads('${f}')"><i class="ti ti-trash"></i> Delete Selected</button><button onclick="selLeads.clear();rLeads('${f}')" style="background:var(--bg4);color:var(--t2);border-color:var(--b2)">Cancel</button></div>`;
+}
+function deleteLeads(f){
+  if(!selLeads.size)return;
+  if(!confirm('Delete '+selLeads.size+' lead'+(selLeads.size!==1?'s':'')+' permanently? This cannot be undone.'))return;
+  selLeads.forEach(id=>{const i=S.findIndex(s=>s.id===id);if(i>-1)S.splice(i,1);});
+  selLeads.clear();saveAll();rLeads(f);
+}
+function sortL(by){const el=document.getElementById('ll');if(!el)return;const l=[...S].sort((a,b)=>by==='sc'?b.sc-a.sc:by==='rv'?b.rv-a.rv:a.co.localeCompare(b.co));el.innerHTML=lRows(l);}
+function openL(id){sel=S.find(s=>s.id===id);document.getElementById('pt').textContent=sel.co;document.getElementById('ps').textContent=sel.ind+' · '+sel.city+', '+sel.sta;rDetail();}
+function rDetail(){
+  const s=sel;
+  document.getElementById('content').innerHTML=`
+  <button class="back-btn" onclick="go('leads')"><i class="ti ti-arrow-left"></i> Back to Leads</button>
+  <div class="lhead">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="width:46px;height:46px;border-radius:var(--rmd);background:var(--bblue);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-building-factory-2" style="font-size:22px;color:var(--tblue)"></i></div>
+        <div><div style="font-size:18px;font-weight:700;color:var(--t1)">${s.co}</div><div style="font-size:12px;color:var(--t3);margin:3px 0 7px">${s.ind} · ${s.city}, ${s.sta}</div><div style="display:flex;gap:5px;flex-wrap:wrap">${$sb(s.st)}${s.tg.map(t=>`<span class="badge" style="background:var(--bg4);color:var(--t2)">${t}</span>`).join('')}</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="text-align:center"><div style="font-size:24px;font-weight:700;color:${$sc(s.sc)}">${s.sc}</div><div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Score</div></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn"><i class="ti ti-phone"></i> Call</button>
+          <button class="btn-ghost"><i class="ti ti-mail"></i> Email</button>
+          <button class="btn-ghost" onclick="go('loadtool')"><i class="ti ti-bolt"></i> Analyze Load</button>
+        </div>
+      </div>
+    </div>
+    <div class="pgrid">${[['Est. Freight/yr',$m(s.sp||0)],['Loads/Month',s.vol||'—'],['Your Revenue',s.rv>0?$m(s.rv):'None yet'],['Est. Your Value',s.sp?$m(Math.round(s.sp*.18)):'TBD']].map(([l,v])=>`<div class="pi"><div class="pl">${l}</div><div class="pv">${v}</div></div>`).join('')}</div>
+  </div>
+  <div class="tabs"><button class="tab-btn active" onclick="swTab('ov',this)">Overview</button><button class="tab-btn" onclick="swTab('ac',this)">Activities</button><button class="tab-btn" onclick="swTab('ct',this)">Contacts</button></div>
+  <div id="tc">${dOv(s)}</div>`;
+}
+function swTab(t,el){document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active');document.getElementById('tc').innerHTML={ov:()=>dOv(sel),ac:dAct,ct:()=>dCt(sel)}[t]();}
+function dOv(s){return`<div class="g2"><div class="card"><div class="card-title">Contact Info</div>${[['<i class="ti ti-phone"></i>','Phone',s.ph],['<i class="ti ti-mail"></i>','Email',s.em],['<i class="ti ti-map-pin"></i>','Location',s.city+', '+s.sta],['<i class="ti ti-user"></i>','Source',s.src?.replace(/_/g,' ')],['<i class="ti ti-clock"></i>','Last Contact',$a(s.lc)]].map(([ic,l,v])=>`<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--b1)"><span style="font-size:14px;color:var(--t3);width:18px;flex-shrink:0">${ic}</span><div><div style="font-size:10px;color:var(--t3)">${l}</div><div style="font-size:12px;font-weight:600;color:var(--t1)">${v||'—'}</div></div></div>`).join('')}</div><div class="card"><div class="card-title">Freight Profile</div><div style="margin-bottom:10px"><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Equipment</div><div>${s.fr.map(t=>`<span style="background:var(--bblue);color:var(--tblue);font-size:11px;padding:3px 9px;border-radius:99px;font-weight:600;margin-right:5px">${t.replace(/_/g,' ')}</span>`).join('')}</div></div><div style="margin-bottom:10px"><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">AI Score</div><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:7px;background:var(--b2);border-radius:4px;overflow:hidden"><div style="width:${s.sc}%;height:100%;background:${$sc(s.sc)};border-radius:4px"></div></div><span style="font-size:13px;font-weight:700;color:${$sc(s.sc)}">${s.sc}/100</span></div></div><div style="background:var(--bgreen);border:1px solid rgba(52,211,153,.2);border-radius:var(--rmd);padding:10px;font-size:11px;color:var(--tgreen)"><i class="ti ti-bulb"></i> High-value prospect. Prioritize this week.</div></div></div>`;}
+function dAct(){return`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div class="card-title">Activity Timeline</div><button class="btn">+ Log Activity</button></div>${[{ic:'ti-phone',su:'Discovery call',bo:'Spoke with VP Logistics. Ships 45 loads/mo dry van. IL→TX and IL→GA. Unhappy with current broker. Follow up with proposal Friday.',oc:'meeting booked',ti:'3d ago'},{ic:'ti-mail',su:'3-lane rate proposal sent',bo:'Sent proposal: IL→TX $2,150, IL→GA flatbed $1,840, IL→OH $980.',oc:null,ti:'5d ago'},{ic:'ti-notes',su:'Competitor intel',bo:'Using Coyote as backup. Rate-sensitive but on-time delivery is the priority. Bad Q4 with a no-show carrier.',oc:null,ti:'7d ago'},{ic:'ti-message',su:'Follow-up text sent',bo:'Hey John — just following up on the proposal. Any questions?',oc:null,ti:'1d ago'}].map(a=>`<div class="arow"><div class="aicon"><i class="ti ${a.ic}"></i></div><div style="flex:1"><div style="display:flex;justify-content:space-between"><span style="font-size:12px;font-weight:600;color:var(--t1)">${a.su}</span><span style="font-size:10px;color:var(--t3)">${a.ti}</span></div><div style="font-size:11px;color:var(--t2);margin-top:3px;line-height:1.5">${a.bo}</div>${a.oc?`<span style="display:inline-block;margin-top:5px;font-size:10px;background:var(--bgreen);color:var(--tgreen);padding:2px 7px;border-radius:99px">${a.oc}</span>`:''}</div></div>`).join('')}</div>`;}
+function dCt(s){return`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div class="card-title">Contacts at ${s.co}</div><button class="btn">+ Add Contact</button></div><div style="background:var(--bg4);border-radius:var(--rmd);padding:14px;display:flex;gap:12px;align-items:center"><div class="avatar" style="width:36px;height:36px;font-size:12px">JD</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--t1)">John Davis</div><div style="font-size:11px;color:var(--t3)">VP of Logistics · Decision maker</div></div><div style="text-align:right;font-size:11px;color:var(--t2)"><div>${s.ph}</div><div>${s.em}</div></div></div></div>`;}
+function rPipe(){
+  const m={};STGS.forEach(sg=>{m[sg.id]=[];});S.forEach(s=>{if(m[s.sg])m[s.sg].push(s);});
+  document.getElementById('content').innerHTML=`<div class="kanban">${STGS.map(sg=>{const l=m[sg.id]||[];const v=l.reduce((a,s)=>a+(s.sp||0)*.15,0);return`<div class="kcol"><div class="khead"><div><div style="display:flex;align-items:center;gap:5px;margin-bottom:2px"><div class="sdot" style="background:${sg.cl}"></div><span style="font-size:11px;font-weight:600;color:var(--t1)">${sg.lb}</span></div><div style="font-size:10px;color:var(--t3)">${l.length} · ${v>0?$m(Math.round(v)):'$0'}</div></div></div>${l.map(s=>{const du=$u(s.fu);return`<div class="dc" style="border-left-color:${sg.cl}" onclick="openL('${s.id}')"><div style="font-size:11px;font-weight:600;color:var(--t1);margin-bottom:3px">${s.co}</div><div style="font-size:10px;color:var(--t3);margin-bottom:7px">${s.fr[0]?.replace('_',' ')||''} · ${s.sta}</div><div style="display:flex;justify-content:space-between;align-items:center"><div class="sb" style="flex:1;margin-right:8px"><div class="st"><div class="sf" style="width:${s.sc}%;background:${$sc(s.sc)}"></div></div><span style="font-size:9px;color:${$sc(s.sc)}">${s.sc}</span></div>${s.sp?`<span style="font-size:9px;color:var(--t3)">${$m(s.sp)}</span>`:''}</div>${s.fu?`<div style="margin-top:5px;font-size:9px;color:${du.ov?'var(--tred)':'var(--t3)'}">${du.l}</div>`:''}</div>`;}).join('')}${l.length===0?'<div style="padding:16px;text-align:center;font-size:11px;color:var(--t3)">No leads here</div>':''}</div>`;}).join('')}</div>`;
+}
+function rAnalytics(){
+  const fn=[['Total Leads',156,100],['Contacted',112,71.8],['Qualified',74,47.4],['Proposal Sent',38,24.4],['Negotiating',19,12.2],['Won',38,24.4]];
+  document.getElementById('content').innerHTML=`
+  <div class="kpi-grid">${[['Total Pipeline',$m(4280000),'+12.4%'],['Won This Month',$m(475400),'+8.7%'],['Conversion','24.4%','+2.1%'],['Avg Deal Value',$m(12510),'-3.2%']].map(([l,v,c])=>`<div class="kpi"><div class="kpi-l">${l}</div><div class="kpi-v">${v}</div><div class="kpi-c" style="color:${c.startsWith('-')?'var(--tred)':'var(--tgreen)'}">${c}</div></div>`).join('')}</div>
+  <div class="g2">
+    <div class="card"><div class="card-title">Sales Funnel</div><div class="card-sub">Current pipeline breakdown</div>${fn.map(([l,v,p],i)=>`<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--t2)">${l}</span><span style="font-size:11px;font-weight:600;color:var(--t1)">${v} <span style="color:var(--t3);font-weight:400">(${p.toFixed(1)}%)</span></span></div><div style="height:6px;background:var(--b2);border-radius:3px"><div style="width:${p}%;height:100%;background:${i===5?'var(--green)':'var(--blue)'};border-radius:3px;opacity:${1-i*.07}"></div></div></div>`).join('')}</div>
+    <div class="card"><div class="card-title">Lane Profitability</div><div class="card-sub">Top 5 by revenue</div>${[['Chicago IL → Dallas TX','Dry Van',228400,18.2,2.92],['Atlanta GA → Dallas TX','Dry Van',178200,21.5,2.87],['Cleveland OH → Houston TX','Tanker',161300,19.8,3.04],['Portland OR → Los Angeles CA','Reefer',98500,23.2,3.41],['Detroit MI → Atlanta GA','Flatbed',89400,17.3,2.74]].map(([l,eq,rv,m,rpm])=>`<div style="background:var(--bg4);border-radius:var(--rmd);padding:10px;margin-bottom:7px;display:flex;justify-content:space-between"><div><div style="font-size:11px;font-weight:600;color:var(--t1)">${l}</div><div style="font-size:10px;color:var(--t3)">${eq}</div></div><div style="text-align:right"><div style="font-size:12px;font-weight:600;color:${m>=20?'var(--tgreen)':'var(--tamber)'}">${$p(m)}</div><div style="font-size:10px;color:var(--t3)">$${rpm.toFixed(2)}/mi</div></div></div>`).join('')}</div>
+  </div>`;
+}
+function rCarriers(){
+  selCarriers.clear();
+  document.getElementById('content').innerHTML=`
+  <div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button class="btn">+ Add Carrier</button></div>
+  <div id="car-sel-bar"></div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="th" style="grid-template-columns:30px 2fr 90px 1fr 70px 80px 60px">
+      <div><div class="sel-cb" id="car-all-cb" onclick="toggleAllCarriers()"></div></div>
+      <div>Carrier</div><div>Status</div><div>Equipment</div><div>On-Time</div><div>Acceptance</div><div>Loads</div>
+    </div>
+    <div id="car-list">${cRows()}</div>
+  </div>`;
+}
+function cRows(){
+  return CA.map(c=>{
+    const isSel=selCarriers.has(c.mc);
+    return`<div class="tr${isSel?' selected':''}" style="grid-template-columns:30px 2fr 90px 1fr 70px 80px 60px">
+      <div onclick="event.stopPropagation();toggleSelCarrier('${c.mc}')">
+        <div class="sel-cb${isSel?' checked':''}">${isSel?'<i class="ti ti-check" style="font-size:9px"></i>':''}</div>
+      </div>
+      <div><div class="cn">${c.co}</div><div class="cs2">${c.mc} · ${c.sta} · ${c.tr} trucks</div></div>
+      <span class="badge" style="background:${c.st==='preferred'?'var(--bgreen)':'var(--bblue)'};color:${c.st==='preferred'?'var(--tgreen)':'var(--tblue)'}">${c.st}</span>
+      <div>${c.fr.map(t=>`<span style="font-size:9px;background:var(--bg4);color:var(--t2);padding:2px 5px;border-radius:3px;margin-right:2px">${t.replace('_',' ')}</span>`).join('')}</div>
+      <div style="font-size:12px;font-weight:600;color:${c.ot>=95?'var(--tgreen)':c.ot>=90?'var(--tamber)':'var(--tred)'}">${c.ot}%</div>
+      <div style="font-size:12px;color:var(--t2)">${c.ac}%</div>
+      <div style="font-size:12px;color:var(--t2)">${c.ld}</div>
+    </div>`;
+  }).join('');
+}
+function toggleSelCarrier(mc){
+  if(selCarriers.has(mc))selCarriers.delete(mc);else selCarriers.add(mc);
+  updateCarSelBar();
+  const el=document.getElementById('car-list');if(el)el.innerHTML=cRows();
+  const cb=document.getElementById('car-all-cb');
+  if(cb){const a=CA.length>0&&CA.every(c=>selCarriers.has(c.mc));cb.className='sel-cb'+(a?' checked':'');cb.innerHTML=a?'<i class="ti ti-check" style="font-size:9px"></i>':'';}
+}
+function toggleAllCarriers(){
+  const allSel=CA.length>0&&CA.every(c=>selCarriers.has(c.mc));
+  CA.forEach(c=>allSel?selCarriers.delete(c.mc):selCarriers.add(c.mc));
+  updateCarSelBar();
+  const el=document.getElementById('car-list');if(el)el.innerHTML=cRows();
+  const cb=document.getElementById('car-all-cb');
+  if(cb){const n=!allSel&&CA.length>0;cb.className='sel-cb'+(n?' checked':'');cb.innerHTML=n?'<i class="ti ti-check" style="font-size:9px"></i>':'';}
+}
+function updateCarSelBar(){
+  const el=document.getElementById('car-sel-bar');if(!el)return;
+  if(selCarriers.size===0){el.innerHTML='';return;}
+  el.innerHTML=`<div class="sel-bar"><i class="ti ti-checkbox" style="font-size:14px"></i><span><strong>${selCarriers.size}</strong> carrier${selCarriers.size!==1?'s':''} selected</span><button onclick="deleteCarriers()"><i class="ti ti-trash"></i> Delete Selected</button><button onclick="selCarriers.clear();rCarriers()" style="background:var(--bg4);color:var(--t2);border-color:var(--b2)">Cancel</button></div>`;
+}
+function deleteCarriers(){
+  if(!selCarriers.size)return;
+  if(!confirm('Delete '+selCarriers.size+' carrier'+(selCarriers.size!==1?'s':'')+' permanently? This cannot be undone.'))return;
+  selCarriers.forEach(mc=>{const i=CA.findIndex(c=>c.mc===mc);if(i>-1)CA.splice(i,1);});
+  selCarriers.clear();saveAll();rCarriers();
+}
+function rTasks(){
+  selTasks.clear();
+  document.getElementById('content').innerHTML=`<div style="max-width:600px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <div><div style="font-size:14px;font-weight:600;color:var(--t1)">${T.filter(t=>!t.dn&&!done.has(t.id)).length} pending</div><div style="font-size:11px;color:var(--t3);margin-top:1px">${$ov()} overdue</div></div>
+    <button class="btn">+ Add Task</button>
+  </div>
+  <div id="task-sel-bar"></div>
+  <div class="card" id="tl" style="padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg4);border-bottom:1px solid var(--b1)">
+      <div class="sel-cb" id="task-all-cb" onclick="toggleAllTasks()"></div>
+      <span style="font-size:10px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:.07em">Select All</span>
+    </div>
+    <div id="task-rows" style="padding:0 14px">${tRows()}</div>
+  </div></div>`;
+}
+function tRows(){
+  const ac=T.filter(t=>!t.dn&&!done.has(t.id)),dn=T.filter(t=>t.dn||done.has(t.id));
+  const rows=ac.map(t=>{
+    const du=$u(t.du),isSel=selTasks.has(t.id);
+    return`<div class="taskrow" style="${isSel?'background:rgba(37,99,235,0.08);border-radius:4px;padding:10px 4px;':''}">
+      <div class="sel-cb${isSel?' checked':''}" onclick="toggleSelTask('${t.id}')" style="margin-right:2px">${isSel?'<i class="ti ti-check" style="font-size:9px"></i>':''}</div>
+      <div class="cb" onclick="tog('${t.id}')"></div>
+      <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--t1)">${t.ti}</div><div style="font-size:10px;color:var(--t3);margin-top:1px">${t.co}</div></div>
+      <span style="font-size:10px;background:${PC[t.pr]}18;color:${PC[t.pr]};padding:2px 7px;border-radius:99px;font-weight:600;flex-shrink:0">${t.pr}</span>
+      <span style="font-size:10px;color:${du.ov?'var(--tred)':'var(--t3)'};font-weight:${du.ov?600:400};min-width:75px;text-align:right;flex-shrink:0">${du.l}</span>
+    </div>`;
+  }).join('');
+  if(!dn.length)return rows;
+  const doneRows=dn.map(t=>{
+    const isSel=selTasks.has(t.id);
+    return`<div class="taskrow" style="${isSel?'background:rgba(37,99,235,0.08);border-radius:4px;':''}" >
+      <div class="sel-cb${isSel?' checked':''}" onclick="toggleSelTask('${t.id}')" style="margin-right:2px">${isSel?'<i class="ti ti-check" style="font-size:9px"></i>':''}</div>
+      <div class="cb done"><i class="ti ti-check" style="font-size:10px"></i></div>
+      <div style="font-size:12px;color:var(--t3);text-decoration:line-through">${t.ti}</div>
+    </div>`;
+  }).join('');
+  return rows+'</div><div style="background:var(--bg4);padding:6px 16px;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Completed</div><div style="padding:0 14px;opacity:.6">'+doneRows;
+}
+function toggleSelTask(id){
+  if(selTasks.has(id))selTasks.delete(id);else selTasks.add(id);
+  updateTaskSelBar();
+  const el=document.getElementById('task-rows');if(el)el.innerHTML=tRows();
+  const cb=document.getElementById('task-all-cb');
+  if(cb){const a=T.length>0&&T.every(t=>selTasks.has(t.id));cb.className='sel-cb'+(a?' checked':'');cb.innerHTML=a?'<i class="ti ti-check" style="font-size:9px"></i>':'';}
+}
+function toggleAllTasks(){
+  const allSel=T.length>0&&T.every(t=>selTasks.has(t.id));
+  T.forEach(t=>allSel?selTasks.delete(t.id):selTasks.add(t.id));
+  updateTaskSelBar();
+  const el=document.getElementById('task-rows');if(el)el.innerHTML=tRows();
+  const cb=document.getElementById('task-all-cb');
+  if(cb){const n=!allSel&&T.length>0;cb.className='sel-cb'+(n?' checked':'');cb.innerHTML=n?'<i class="ti ti-check" style="font-size:9px"></i>':'';}
+}
+function updateTaskSelBar(){
+  const el=document.getElementById('task-sel-bar');if(!el)return;
+  if(selTasks.size===0){el.innerHTML='';return;}
+  el.innerHTML=`<div class="sel-bar"><i class="ti ti-checkbox" style="font-size:14px"></i><span><strong>${selTasks.size}</strong> task${selTasks.size!==1?'s':''} selected</span><button onclick="deleteTasks()"><i class="ti ti-trash"></i> Delete Selected</button><button onclick="selTasks.clear();rTasks()" style="background:var(--bg4);color:var(--t2);border-color:var(--b2)">Cancel</button></div>`;
+}
+function deleteTasks(){
+  if(!selTasks.size)return;
+  if(!confirm('Delete '+selTasks.size+' task'+(selTasks.size!==1?'s':'')+' permanently? This cannot be undone.'))return;
+  selTasks.forEach(id=>{const i=T.findIndex(t=>t.id===id);if(i>-1)T.splice(i,1);});
+  selTasks.clear();saveAll();rTasks();
+}
+function tog(id){if(done.has(id))done.delete(id);else done.add(id);saveAll();rNav();if(page==='tasks'){const el=document.getElementById('task-rows');if(el)el.innerHTML=tRows();}if(page==='dashboard')rDash();}
+function rSettings(){
+  const ed=settingsEditing;
+  document.getElementById('content').innerHTML=`<div style="max-width:560px">
+  <div class="card" style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="card-title">Your Brokerage</div>
+      ${ed?`<button class="set-save-btn" onclick="saveSettings()"><i class="ti ti-device-floppy"></i> Save</button>`:`<button class="set-edit-btn" onclick="settingsEditing=true;rSettings()"><i class="ti ti-pencil"></i> Edit</button>`}
+    </div>
+    <div class="set-field"><span class="set-label">Company Name</span>${ed?`<input class="set-input" id="set-name" value="${orgSettings.name}">`:`<span class="set-value">${orgSettings.name}</span>`}</div>
+    <div class="set-field"><span class="set-label">MC Number</span>${ed?`<input class="set-input" id="set-mc" placeholder="MC-XXXXXX" value="${orgSettings.mc}">`:`<span class="set-value" style="color:${orgSettings.mc?'var(--t1)':'var(--t3)'}">${orgSettings.mc||'Not set — add after getting authority'}</span>`}</div>
+    <div class="set-field"><span class="set-label">Primary Email</span>${ed?`<input class="set-input" id="set-email" type="email" value="${orgSettings.email}">`:`<span class="set-value">${orgSettings.email}</span>`}</div>
+    <div class="set-field"><span class="set-label">Plan</span><span class="set-value">Solo (SaaS-ready)</span></div>
+  </div>
+  ${[{t:'AI Configuration',f:[['Lead Scoring','Add OPENAI_API_KEY to activate'],['Outreach Generator','Ready — needs API key'],['Load Analyzer','Active — no API key needed']]},{t:'SaaS Readiness',f:[['Multi-tenant','Enabled — every org isolated'],['Billing (Stripe)','Add Stripe keys when ready to sell'],['White-label','Ready — swap logo and domain']]}].map(s=>`<div class="card" style="margin-bottom:12px"><div class="card-title" style="margin-bottom:10px">${s.t}</div>${s.f.map(([l,v],i)=>`<div class="set-field" style="border-bottom:${i<s.f.length-1?'1px solid var(--b1)':'none'}"><span class="set-label">${l}</span><span class="set-value" style="color:${v.startsWith('Active')||v.startsWith('Enabled')||v.startsWith('Ready')?'var(--tgreen)':'var(--t1)'}">${v}</span></div>`).join('')}</div>`).join('')}
+  <div class="card" style="margin-bottom:12px;border-color:rgba(220,38,38,0.2)">
+    <div class="card-title" style="margin-bottom:10px;color:var(--tred)">Data Management</div>
+    <div class="set-field">
+      <span class="set-label">Auto-save</span>
+      <span class="set-value" style="color:var(--tgreen)">Active — saves on every change</span>
+    </div>
+    <div class="set-field">
+      <span class="set-label">Last saved</span>
+      <span class="set-value" id="last-saved-time" style="font-size:11px">${(()=>{const s=getSaveStatus();return s?s.toLocaleString():'Never saved';})()}</span>
+    </div>
+    <div class="set-field" style="border-bottom:none">
+      <span class="set-label" style="color:var(--tred)">Reset all data</span>
+      <button onclick="clearSave()" style="padding:4px 12px;background:var(--bred);color:var(--tred);border:1px solid rgba(248,113,113,.25);border-radius:var(--rmd);font-size:11px;font-weight:600;cursor:pointer"><i class="ti ti-trash"></i> Clear & Reset</button>
+    </div>
+  </div>
+  </div>`;
+}
+function saveSettings(){
+  const n=document.getElementById('set-name')?.value?.trim();
+  const mc=document.getElementById('set-mc')?.value?.trim();
+  const em=document.getElementById('set-email')?.value?.trim();
+  if(n){orgSettings.name=n;const lo=document.querySelector('.logo-name');if(lo)lo.textContent=n;}
+  if(mc!==undefined)orgSettings.mc=mc;
+  if(em)orgSettings.email=em;
+  settingsEditing=false;
+  saveAll();
+  rSettings();
+}
+function rLoadTool(){
+  document.getElementById('content').innerHTML=`
+  <div class="la-grid">
+    <div>
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <div class="card-title">Load Analyzer</div>
+          <div style="display:flex;gap:6px">
+            <span style="background:var(--bgreen);color:var(--tgreen);font-size:10px;font-weight:600;padding:3px 10px;border-radius:99px;border:1px solid rgba(52,211,153,.2)">Live Calc</span>
+            <button class="btn-sm" onclick="laClear()"><i class="ti ti-refresh"></i> Reset</button>
+          </div>
+        </div>
+        <div class="card-sub">Enter load details — results update as you type</div>
+        <div class="la-section">Lane</div>
+        <div class="state-row">
+          <div class="fg" style="margin:0"><label class="fl">Origin State</label><input class="fi" id="la-orig" placeholder="IL" maxlength="2" oninput="this.value=this.value.toUpperCase();laCalc()"></div>
+          <div class="arr-mid"><i class="ti ti-arrow-right"></i></div>
+          <div class="fg" style="margin:0"><label class="fl">Destination State</label><input class="fi" id="la-dest" placeholder="TX" maxlength="2" oninput="this.value=this.value.toUpperCase();laCalc()"></div>
+        </div>
+        <div class="fg" style="margin-top:8px"><label class="fl">Miles</label><input class="fi" id="la-mi" type="number" placeholder="781" oninput="laCalc()"></div>
+        <div class="la-section">Rates</div>
+        <div class="fi-row">
+          <div class="fg fi-pre"><label class="fl">Shipper Rate</label><span class="fi-sym">$</span><input class="fi" id="la-sr" type="number" placeholder="2400" oninput="laCalc()"></div>
+          <div class="fg fi-pre"><label class="fl">Carrier Pay</label><span class="fi-sym">$</span><input class="fi" id="la-cr" type="number" placeholder="1600" oninput="laCalc()"></div>
+        </div>
+        <div class="la-section">Equipment & Load</div>
+        <div class="fg"><label class="fl">Equipment Type</label>
+          <select class="fi" id="la-eq" onchange="laCalc()">
+            <option value="dry_van">Dry Van</option><option value="reefer">Reefer</option><option value="flatbed">Flatbed</option><option value="step_deck">Step Deck</option><option value="lowboy">Lowboy</option><option value="tanker">Tanker</option><option value="intermodal">Intermodal</option><option value="ltl">LTL</option><option value="partial">Partial</option><option value="expedited">Expedited</option><option value="heavy_haul">Heavy Haul</option><option value="power_only">Power Only</option>
+          </select>
+        </div>
+        <div class="fi-row">
+          <div class="fg"><label class="fl">Commodity (optional)</label><input class="fi" id="la-com" placeholder="Retail goods" oninput="laCalc()"></div>
+          <div class="fg"><label class="fl">Weight lbs (optional)</label><input class="fi" id="la-wt" type="number" placeholder="42000" oninput="laCalc()"></div>
+        </div>
+        <div class="fg"><label class="fl">Pickup Date</label><input class="fi" id="la-dt" type="date" oninput="laCalc()"></div>
+        <button class="btn-analyze" onclick="laCalc()"><i class="ti ti-bolt"></i> Analyze Load</button>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="card-title">Load History</div>
+          <button class="btn-sm" onclick="laClearHistory()">Clear</button>
+        </div>
+        <div id="la-hist"><div style="font-size:11px;color:var(--t3);text-align:center;padding:16px">No loads analyzed yet</div></div>
+      </div>
+    </div>
+    <div id="la-results">
+      <div class="la-empty"><div style="font-size:36px;margin-bottom:12px;opacity:.3"><i class="ti ti-calculator"></i></div><div style="font-size:14px;font-weight:600;color:var(--t2);margin-bottom:6px">Enter load details to analyze</div><div style="font-size:12px;color:var(--t3)">Shipper rate, carrier pay, miles, and equipment required</div></div>
+    </div>
+  </div>`;
+  document.getElementById('la-dt').value=new Date().toISOString().split('T')[0];
+  laRenderHistory();
+}
+function laGetVals(){
+  return{
+    sr:parseFloat(document.getElementById('la-sr')?.value)||0,
+    cr:parseFloat(document.getElementById('la-cr')?.value)||0,
+    mi:parseFloat(document.getElementById('la-mi')?.value)||0,
+    eq:document.getElementById('la-eq')?.value||'dry_van',
+    orig:(document.getElementById('la-orig')?.value||'').toUpperCase(),
+    dest:(document.getElementById('la-dest')?.value||'').toUpperCase(),
+    com:document.getElementById('la-com')?.value||'',
+    wt:parseInt(document.getElementById('la-wt')?.value)||0,
+    dt:document.getElementById('la-dt')?.value||'',
+  };
+}
+function laCalc(){
+  const v=laGetVals();
+  if(!v.sr||!v.cr||!v.mi){document.getElementById('la-results').innerHTML=`<div class="la-empty"><div style="font-size:36px;margin-bottom:12px;opacity:.3"><i class="ti ti-calculator"></i></div><div style="font-size:14px;font-weight:600;color:var(--t2);margin-bottom:6px">Enter load details to analyze</div><div style="font-size:12px;color:var(--t3)">Shipper rate, carrier pay, miles, and equipment required</div></div>`;return;}
+  const b=EQ[v.eq]||EQ.dry_van;
+  const md=v.sr-v.cr,mp=v.sr>0?(md/v.sr)*100:0,rpm=v.mi>0?v.sr/v.mi:0,crpm=v.mi>0?v.cr/v.mi:0;
+  const ck=`${v.orig}-${v.dest}`,rk=`${v.dest}-${v.orig}`;
+  const dem=CORR[ck]||CORR[rk]||72;
+  const dMult=0.82+(dem/100)*0.32;
+  const seas=SEAS[v.eq]||SEAS.dry_van;
+  const sMult=seas[$q()];
+  const mkt=Math.round(b.tr*v.mi*dMult*sMult);
+  const vsMkt=mkt>0?((v.sr-mkt)/mkt)*100:0;
+  const cpRec=Math.round(v.sr*b.cp),cpMin=Math.round(v.sr*0.64),cpMax=Math.round(v.sr*0.82);
+  const mpgVal=MPG[v.eq]||6.0,fuel=Math.round((v.mi/mpgVal)*DIESEL);
+  const dhPct=DH[v.orig]||0.14,dhCost=Math.round(crpm*v.mi*dhPct*0.28);
+  const net=md-dhCost,netP=v.sr>0?(net/v.sr)*100:0;
+  let ls=50;
+  if(rpm>=b.xr)ls+=25;else if(rpm>=b.tr)ls+=15;else if(rpm>=b.mr)ls+=5;else ls-=12;
+  if(mp>=b.xm)ls+=25;else if(mp>=b.tm)ls+=15;else if(mp>=b.mm)ls+=5;else ls-=18;
+  ls+=Math.round((dem-72)/2.5);if(sMult>1.08)ls+=5;
+  ls=Math.min(100,Math.max(0,ls));
+  const grade=ls>=85?'A':ls>=70?'B':ls>=55?'C':'D';
+  let verdict='pass';
+  if(mp>=b.tm&&rpm>=b.tr)verdict='book';
+  else if(mp>=b.mm&&rpm>=b.mr)verdict='negotiate';
+  const flags=[];
+  if(mp<b.mm)flags.push({t:'danger',x:`Margin ${mp.toFixed(1)}% below minimum ${b.mm}% for ${b.n}`});
+  if(rpm<b.mr)flags.push({t:'danger',x:`RPM $${rpm.toFixed(2)}/mi below floor $${b.mr.toFixed(2)} for ${b.n}`});
+  if(v.cr>cpMax)flags.push({t:'warn',x:`Carrier pay $${v.cr.toLocaleString()} above recommended max $${cpMax.toLocaleString()}`});
+  if(vsMkt<-12)flags.push({t:'warn',x:`Shipper rate ${Math.abs(vsMkt).toFixed(0)}% below market — room to negotiate up`});
+  if(vsMkt>15)flags.push({t:'good',x:`Shipper rate ${vsMkt.toFixed(0)}% above market — strong position`});
+  if(sMult>1.08)flags.push({t:'good',x:`Seasonal demand boost: +${((sMult-1)*100).toFixed(0)}% for ${b.n} this quarter`});
+  if(dhPct>0.17)flags.push({t:'warn',x:`High deadhead region — factor ~$${dhCost.toLocaleString()} extra carrier cost`});
+  if(v.mi<250)flags.push({t:'warn',x:`Short haul ${v.mi} mi — verify profitability after fuel ($${fuel.toLocaleString()})`});
+  if(v.mi>=800)flags.push({t:'good',x:`Long haul ${v.mi.toLocaleString()} mi — higher daily profitability`});
+  if(dem>=85&&v.orig&&v.dest)flags.push({t:'good',x:`${v.orig}→${v.dest} is a high-demand corridor (${dem}/100)`});
+  if(v.cr<cpMin)flags.push({t:'warn',x:`Carrier pay $${v.cr.toLocaleString()} below market floor $${cpMin.toLocaleString()} — may not cover`});
+  const r={...v,b,md,mp,rpm,crpm,mkt,vsMkt,dem,sMult,cpRec,cpMin,cpMax,fuel,dhCost,dhPct,net,netP,ls,grade,verdict,flags};
+  laResult=r;laRender(r);laAddHistory(r);
+}
+const VC={book:{lb:'✓ Book It',sb:'Above-market rate. Post now.',bg:'rgba(5,150,105,.12)',br:'rgba(52,211,153,.25)',cl:'#34d399'},negotiate:{lb:'⚡ Negotiate',sb:'Workable — improve before booking.',bg:'rgba(217,119,6,.12)',br:'rgba(251,191,36,.25)',cl:'#fbbf24'},pass:{lb:'✗ Pass',sb:'Below benchmarks. Walk away.',bg:'rgba(220,38,38,.12)',br:'rgba(248,113,113,.25)',cl:'#f87171'}};
+const GC={A:'#34d399',B:'#fbbf24',C:'#fb923c',D:'#f87171'};
+function laSC(s){return s>=80?'#34d399':s>=60?'#fbbf24':'#f87171';}
+function laRender(r){
+  const vc=VC[r.verdict],gc=GC[r.grade],sc=laSC(r.ls);
+  const circ=2*Math.PI*22,off=circ*(1-r.ls/100);
+  document.getElementById('la-results').innerHTML=`
+  <div class="fade-in">
+    <div class="v-banner" style="background:${vc.bg};border:1px solid ${vc.br};margin-bottom:12px">
+      <div>
+        <div class="v-label" style="color:${vc.cl}">${vc.lb}</div>
+        <div class="v-sub" style="color:${vc.cl}">${vc.sb}</div>
+        ${r.orig&&r.dest?`<div style="font-size:11px;color:${vc.cl};opacity:.7;margin-top:3px">${r.orig}→${r.dest} · ${r.b.n} · ${r.mi.toLocaleString()} mi</div>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="text-align:center"><div style="font-size:26px;font-weight:700;color:${gc};line-height:1">${r.grade}</div><div style="font-size:9px;color:${vc.cl};opacity:.7;text-transform:uppercase;letter-spacing:.06em">Lane Grade</div></div>
+        <div class="g-ring"><svg width="54" height="54" viewBox="0 0 54 54"><circle cx="27" cy="27" r="22" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="4"/><circle cx="27" cy="27" r="22" fill="none" stroke="${sc}" stroke-width="4" stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" stroke-linecap="round"/></svg><div class="g-text" style="color:${sc}">${r.ls}</div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title" style="margin-bottom:10px">Core Metrics</div>
+      <div class="m-grid">
+        <div class="mc"><div class="mc-l">Broker Margin</div><div class="mc-v" style="color:${r.md>=500?'#34d399':r.md>=200?'#fbbf24':'#f87171'}">${$m(r.md)}</div><div class="mc-s">${$p(r.mp)} of load</div></div>
+        <div class="mc"><div class="mc-l">Net Margin</div><div class="mc-v" style="color:${r.net>=400?'#34d399':r.net>=150?'#fbbf24':'#f87171'}">${$m(r.net)}</div><div class="mc-s">~$${r.dhCost.toLocaleString()} deadhead</div></div>
+        <div class="mc"><div class="mc-l">Shipper RPM</div><div class="mc-v" style="color:${r.rpm>=r.b.tr?'#34d399':r.rpm>=r.b.mr?'#fbbf24':'#f87171'}">$${r.rpm.toFixed(2)}</div><div class="mc-s">Target $${r.b.tr.toFixed(2)}+</div></div>
+        <div class="mc"><div class="mc-l">Carrier RPM</div><div class="mc-v" style="color:var(--t2)">$${r.crpm.toFixed(2)}</div><div class="mc-s">Fuel ~$${r.fuel.toLocaleString()}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tabs" style="margin-bottom:10px">
+        <button class="tab-btn active" onclick="laTab('mkt',this)">Market</button>
+        <button class="tab-btn" onclick="laTab('pay',this)">Carrier Pay</button>
+        <button class="tab-btn" onclick="laTab('qt',this)">Quote</button>
+        <button class="tab-btn" onclick="laTab('fl',this)">Flags ${r.flags.length?`<span style="background:${r.flags.some(f=>f.t==='danger')?'var(--red)':'var(--amber)'};color:white;font-size:9px;border-radius:99px;padding:1px 5px;margin-left:2px">${r.flags.length}</span>`:''}</button>
+      </div>
+      <div id="la-tab">${laMkt(r)}</div>
+    </div>
+  </div>`;
+  window._lar=r;
+}
+function laTab(t,el){document.querySelectorAll('#la-results .tab-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active');document.getElementById('la-tab').innerHTML={mkt:laMkt,pay:laPay,qt:laQt,fl:laFl}[t](window._lar);}
+function laMkt(r){
+  const mx=Math.max(r.sr,r.mkt)*1.15;
+  const srW=Math.round((r.sr/mx)*100),mW=Math.round((r.mkt/mx)*100);
+  const diff=r.sr-r.mkt,dc=diff>=0?'#34d399':'#f87171';
+  return`<div>
+  <div class="mkt-row"><div class="mkt-lbl" style="font-weight:600;color:var(--t1)">Your Shipper Rate</div><div class="mkt-bar"><div class="mkt-bg"></div><div class="mkt-fill" style="width:${srW}%;background:var(--blue)"></div></div><div class="mkt-val" style="color:var(--t1)">${$m(r.sr)}</div></div>
+  <div class="mkt-row"><div class="mkt-lbl">Est. Market Rate</div><div class="mkt-bar"><div class="mkt-bg"></div><div class="mkt-fill" style="width:${mW}%;background:var(--t3)"></div></div><div class="mkt-val">${$m(r.mkt)}</div></div>
+  <div class="mkt-row"><div class="mkt-lbl">Your Rate vs Market</div><div style="flex:1"></div><div class="mkt-val" style="color:${dc};font-size:13px">${diff>=0?'+':''}${$m(diff)} (${r.vsMkt>=0?'+':''}${r.vsMkt.toFixed(1)}%)</div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+    <div style="background:var(--bg4);border-radius:var(--rmd);padding:10px"><div style="font-size:10px;color:var(--t3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em">Corridor Demand</div><div style="font-size:18px;font-weight:600;color:${r.dem>=85?'#34d399':r.dem>=75?'#fbbf24':'#f87171'}">${r.dem}/100</div><div style="font-size:10px;color:var(--t3);margin-top:2px">${r.orig&&r.dest?r.orig+'→'+r.dest+' lane':'Enter states for data'}</div></div>
+    <div style="background:var(--bg4);border-radius:var(--rmd);padding:10px"><div style="font-size:10px;color:var(--t3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em">Seasonal Factor</div><div style="font-size:18px;font-weight:600;color:${r.sMult>1.05?'#34d399':r.sMult<0.95?'#f87171':'var(--t2)'}">${r.sMult>1?'+':''}${((r.sMult-1)*100).toFixed(0)}%</div><div style="font-size:10px;color:var(--t3);margin-top:2px">Q${$qn()} adjustment</div></div>
+    <div style="background:var(--bg4);border-radius:var(--rmd);padding:10px"><div style="font-size:10px;color:var(--t3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em">Min Margin</div><div style="font-size:18px;font-weight:600;color:var(--t1)">${r.b.mm}%</div><div style="font-size:10px;color:var(--t3);margin-top:2px">Floor for ${r.b.n}</div></div>
+    <div style="background:var(--bg4);border-radius:var(--rmd);padding:10px"><div style="font-size:10px;color:var(--t3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em">Target Margin</div><div style="font-size:18px;font-weight:600;color:var(--t1)">${r.b.tm}%</div><div style="font-size:10px;color:var(--t3);margin-top:2px">Goal for ${r.b.n}</div></div>
+  </div></div>`;
+}
+function laPay(r){
+  const mx=r.cpMax*1.12;
+  const rL=Math.round((r.cpMin/mx)*100),rW=Math.round(((r.cpMax-r.cpMin)/mx)*100);
+  const recP=Math.round((r.cpRec/mx)*100),crP=Math.min(99,Math.round((r.cr/mx)*100));
+  const cc=r.cr>r.cpMax?'#f87171':r.cr<r.cpMin?'#fbbf24':'#34d399';
+  return`<div>
+  <div style="font-size:12px;color:var(--t2);margin-bottom:12px">Based on shipper rate <strong style="color:var(--t1)">${$m(r.sr)}</strong>, offer the carrier:</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+    <div style="background:var(--bg4);border-radius:var(--rmd);padding:10px;text-align:center"><div style="font-size:10px;color:var(--t3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em">Minimum</div><div style="font-size:17px;font-weight:600;color:#fbbf24">${$m(r.cpMin)}</div><div style="font-size:10px;color:var(--t3)">${$p((r.cpMin/r.sr)*100)}</div></div>
+    <div style="background:var(--bgreen);border:1px solid rgba(52,211,153,.2);border-radius:var(--rmd);padding:10px;text-align:center"><div style="font-size:10px;color:#34d399;margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em">Recommended</div><div style="font-size:17px;font-weight:700;color:#34d399">${$m(r.cpRec)}</div><div style="font-size:10px;color:#34d399;opacity:.7">${$p((r.cpRec/r.sr)*100)}</div></div>
+    <div style="background:var(--bg4);border-radius:var(--rmd);padding:10px;text-align:center"><div style="font-size:10px;color:var(--t3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em">Maximum</div><div style="font-size:17px;font-weight:600;color:#f87171">${$m(r.cpMax)}</div><div style="font-size:10px;color:var(--t3)">${$p((r.cpMax/r.sr)*100)}</div></div>
+  </div>
+  <div style="font-size:11px;color:var(--t3);margin-bottom:5px">Your carrier pay vs range:</div>
+  <div class="pay-track"><div class="pay-range" style="left:${rL}%;width:${rW}%"></div><div class="pay-m" style="left:${recP}%;background:#34d399" title="Recommended"></div><div class="pay-m" style="left:${crP}%;background:${cc}" title="Your rate"></div></div>
+  <div class="pay-labels"><span>${$m(r.cpMin)}</span><span style="color:#34d399">Target ${$m(r.cpRec)}</span><span>${$m(r.cpMax)}</span></div>
+  <div style="margin-top:10px;background:var(--bg4);border-radius:var(--rmd);padding:10px;font-size:12px;color:${cc}"><i class="ti ti-info-circle"></i> ${r.cr>r.cpMax?`Carrier rate $${r.cr.toLocaleString()} is above max. Negotiate down or push shipper rate up.`:r.cr<r.cpMin?`Carrier rate $${r.cr.toLocaleString()} is below floor. You may struggle to find a carrier.`:`Carrier rate $${r.cr.toLocaleString()} is within the recommended range. Margin protected.`}</div>
+  </div>`;
+}
+function laQt(r){
+  const td=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  const txt=`LOAD SUMMARY — ${td}\n${'─'.repeat(38)}\nLane:       ${r.orig&&r.dest?r.orig+' → '+r.dest:'[ORIGIN] → [DEST]'}\nEquipment:  ${r.b.n}\nMiles:      ${r.mi.toLocaleString()} mi${r.com?'\nCommodity:  '+r.com:''}${r.wt?'\nWeight:     '+r.wt.toLocaleString()+' lbs':''}${r.dt?'\nPickup:     '+r.dt:''}\n\nRATES\n${'─'.repeat(38)}\nShipper Rate:    $${r.sr.toLocaleString()}\nCarrier Pay:     $${r.cr.toLocaleString()}\nBroker Margin:   $${r.md.toLocaleString()} (${$p(r.mp)})\n\nANALYSIS\n${'─'.repeat(38)}\nLane Grade:      ${r.grade} (${r.ls}/100)\nShipper RPM:     $${r.rpm.toFixed(2)}/mi\nCarrier RPM:     $${r.crpm.toFixed(2)}/mi\nMarket Rate Est: $${r.mkt.toLocaleString()}\nvs Market:       ${r.vsMkt>=0?'+':''}${r.vsMkt.toFixed(1)}%\nVerdict:         ${r.verdict.toUpperCase()}`;
+  return`<div><div class="q-box">${txt.replace(/\n/g,'<br>').replace(/ /g,'&nbsp;')}</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn-copy" onclick="laCopy()"><i class="ti ti-copy"></i> Copy to Clipboard</button><span id="la-cc" style="font-size:11px;color:#34d399;align-self:center;display:none"><i class="ti ti-check"></i> Copied!</span></div></div>`;
+}
+function laFl(r){
+  if(!r.flags.length)return`<div style="font-size:12px;color:var(--t3);text-align:center;padding:20px"><i class="ti ti-circle-check" style="font-size:20px;color:#34d399;display:block;margin-bottom:6px"></i>No flags — clean load</div>`;
+  return r.flags.map(f=>`<div class="flag flag-${f.t}"><i class="ti ${f.t==='danger'?'ti-alert-circle':f.t==='warn'?'ti-alert-triangle':'ti-circle-check'}"></i><span class="flag-txt">${f.x}</span></div>`).join('');
+}
+function laCopy(){
+  if(!window._lar)return;
+  const r=window._lar;
+  const td=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  const txt=`LOAD SUMMARY — ${td}\nLane: ${r.orig&&r.dest?r.orig+' → '+r.dest:'?'} | ${r.b.n} | ${r.mi} mi\nShipper Rate: $${r.sr.toLocaleString()} | Carrier Pay: $${r.cr.toLocaleString()}\nMargin: $${r.md.toLocaleString()} (${$p(r.mp)}) | Grade: ${r.grade} | ${r.verdict.toUpperCase()}`;
+  navigator.clipboard.writeText(txt).then(()=>{const el=document.getElementById('la-cc');if(el){el.style.display='flex';setTimeout(()=>el.style.display='none',2000);}});
+}
+function laAddHistory(r){laHistory.unshift({...r,ts:Date.now()});if(laHistory.length>15)laHistory.pop();saveAll();laRenderHistory();}
+function laRenderHistory(){
+  const el=document.getElementById('la-hist');if(!el)return;
+  if(!laHistory.length){el.innerHTML='<div style="font-size:11px;color:var(--t3);text-align:center;padding:16px">No loads analyzed yet</div>';return;}
+  const vc={book:'#34d399',negotiate:'#fbbf24',pass:'#f87171'};
+  el.innerHTML=laHistory.map((h,i)=>`<div class="hi-row" onclick="laLoadHistory(${i})"><div class="hi-dot" style="background:${vc[h.verdict]}"></div><div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.orig&&h.dest?h.orig+'→'+h.dest+' · ':''} ${h.b.n}</div><div style="font-size:10px;color:var(--t3)">${$m(h.sr)} · ${$p(h.mp)} margin · Grade ${h.grade}</div></div><div style="font-size:10px;color:var(--t3);flex-shrink:0">${tagoT(h.ts)}</div></div>`).join('');
+}
+function laLoadHistory(i){
+  const h=laHistory[i];
+  const s=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
+  s('la-sr',h.sr);s('la-cr',h.cr);s('la-mi',h.mi);s('la-com',h.com);s('la-wt',h.wt);s('la-orig',h.orig);s('la-dest',h.dest);s('la-dt',h.dt);
+  const eq=document.getElementById('la-eq');if(eq)eq.value=h.eq;
+  laCalc();
+}
+function laClearHistory(){laHistory=[];laRenderHistory();}
+function laClear(){
+  ['la-sr','la-cr','la-mi','la-com','la-wt','la-orig','la-dest'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const eq=document.getElementById('la-eq');if(eq)eq.value='dry_van';
+  document.getElementById('la-results').innerHTML=`<div class="la-empty"><div style="font-size:36px;margin-bottom:12px;opacity:.3"><i class="ti ti-calculator"></i></div><div style="font-size:14px;font-weight:600;color:var(--t2);margin-bottom:6px">Enter load details to analyze</div><div style="font-size:12px;color:var(--t3)">Shipper rate, carrier pay, miles, and equipment required</div></div>`;
+}
+// ============================================================
+// BOOT
+// ============================================================
+
+// ============================================================
+// CHECKLIST VIEW
+// ============================================================
+const CHECKLIST=[
+  {sec:'Legal & Business Setup',cl:'#60a5fa',items:[
+    {id:'c01',title:'Form your LLC or Corporation',detail:'Recommended: Single-member LLC. File in your home state online. Protects personal assets.',cost:'$50-500',req:true},
+    {id:'c02',title:'Get your EIN from IRS.gov',detail:'Free, takes 5 minutes online at irs.gov/ein. Required before opening a business bank account.',cost:'Free',req:true},
+    {id:'c03',title:'Open a business bank account',detail:'Keep business and personal 100% separate from day one. Chase, Wells Fargo, or local credit union.',cost:'$0-25/mo',req:true},
+    {id:'c04',title:'Get a dedicated business phone number',detail:'Google Voice (free) or second SIM. Answer it professionally every time.',cost:'Free-$30/mo',req:false},
+  ]},
+  {sec:'FMCSA Broker Authority',cl:'#fbbf24',items:[
+    {id:'c05',title:'Create account on FMCSA Unified Registration System',detail:'Go to fmcsa.dot.gov → Register. Do this before filing anything.',cost:'Free',req:true},
+    {id:'c06',title:'File Form OP-1 — Property Broker Authority',detail:'Apply for MC number through the Unified Registration System online.',cost:'$300',req:true},
+    {id:'c07',title:'Wait for FMCSA processing',detail:'4-6 weeks typical. They mail your MC number. Check status at safer.fmcsa.dot.gov.',cost:'Free',req:true},
+    {id:'c08',title:'Confirm authority is ACTIVE before booking anything',detail:'Check safer.fmcsa.dot.gov. Must show ACTIVE — not pending.',cost:'Free',req:true},
+  ]},
+  {sec:'Surety Bond (BMC-84)',cl:'#34d399',items:[
+    {id:'c09',title:'Purchase $75,000 Surety Bond',detail:'Required by FMCSA. Protects carriers/shippers if you default on payment. Annual renewal.',cost:'$900-3,000/yr',req:true},
+    {id:'c10',title:'Shop at least 3 bond providers',detail:'Try: Surety Bonds Direct, JW Surety, or your local insurance agent. Credit affects rate.',cost:'Varies',req:true},
+    {id:'c11',title:'Confirm BMC-84 filed with FMCSA',detail:'Your bond provider files this electronically. Verify it shows on FMCSA portal.',cost:'Included',req:true},
+  ]},
+  {sec:'BOC-3 Process Agent',cl:'#a78bfa',items:[
+    {id:'c12',title:'Hire a BOC-3 process agent',detail:'Required in every state before authority activates. They accept legal documents on your behalf.',cost:'~$30 one-time',req:true},
+    {id:'c13',title:'Providers: USDOT Filing, BOC3.com, National Registered Agents',detail:'All do the same thing. Pick one, pay, they file electronically with FMCSA.',cost:'$25-50',req:true},
+  ]},
+  {sec:'Insurance',cl:'#fb923c',items:[
+    {id:'c14',title:'General Liability Insurance ($1M)',detail:'Protects your business from general claims. Get quotes from a commercial insurance broker.',cost:'$400-800/yr',req:false},
+    {id:'c15',title:'Contingent Cargo Insurance',detail:'Covers cargo loss/damage if carrier insurance fails. Strongly recommended from day one.',cost:'$500-1,200/yr',req:false},
+    {id:'c16',title:'E&O (Errors & Omissions)',detail:'Covers mistakes in your brokering. Optional early on, smart once you have volume.',cost:'$600-1,500/yr',req:false},
+  ]},
+  {sec:'Load Board Access',cl:'#38bdf8',items:[
+    {id:'c17',title:'DAT Load Board subscription',detail:'Industry standard. Carriers check DAT daily. Get DAT One to start. Best for national freight.',cost:'$150-500/mo',req:true},
+    {id:'c18',title:'Truckstop.com (optional)',detail:'Second largest load board. Consider after first 90 days when you have cash flow.',cost:'$150-400/mo',req:false},
+    {id:'c19',title:'123Loadboard (budget option)',detail:'Cheaper alternative to DAT. Smaller pool but good for getting started.',cost:'$35-75/mo',req:false},
+  ]},
+  {sec:'Tools & Setup',cl:'#e879f9',items:[
+    {id:'c20',title:'FuturoFreight — this app',detail:'Already done. Add your first prospects and start building your pipeline now.',cost:'Free',req:true},
+    {id:'c21',title:'Business email with your domain',detail:'Google Workspace ~$6/mo. yourname@yourcompany.com looks far more professional.',cost:'$6/mo',req:false},
+    {id:'c22',title:'Accounting software',detail:'Wave is free. QuickBooks ~$30/mo. Track every dollar from day one.',cost:'Free-$30/mo',req:false},
+    {id:'c23',title:'Digital signature tool',detail:'DocuSign or HelloSign for rate confirmations. Essential for paperless workflow.',cost:'Free-$20/mo',req:true},
+  ]},
+  {sec:'Before Your First Load',cl:'#f87171',items:[
+    {id:'c24',title:'Verify authority is ACTIVE on FMCSA',detail:'Final check: safer.fmcsa.dot.gov. Status must show ACTIVE. Do not skip this.',cost:'Free',req:true},
+    {id:'c25',title:'Create your carrier packet process',detail:'Every carrier must complete before hauling: W-9, carrier agreement, insurance cert, MC verification.',cost:'Free',req:true},
+    {id:'c26',title:'Create your rate confirmation template',detail:'The document carriers sign agreeing to haul your load. Get a template from a freight attorney.',cost:'Free-$200',req:true},
+    {id:'c27',title:'Decide on carrier payment process',detail:'Pay carriers yourself (net 30-45 days) or use a factoring company. Factoring is smart early on.',cost:'2-5% of load',req:true},
+    {id:'c28',title:'Verify carrier insurance before every single load',detail:'Minimum: $1M auto liability, $100K cargo. Call to verify the cert is active and not expired.',cost:'Free',req:true},
+  ]},
+];
+let clDone=new Set();
+let clOpen=new Set(['Legal & Business Setup']);
+
+function rChecklist(){
+  const total=CHECKLIST.reduce((a,s)=>a+s.items.length,0);
+  const done=CHECKLIST.reduce((a,s)=>a+s.items.filter(i=>clDone.has(i.id)).length,0);
+  const pct=Math.round((done/total)*100);
+  const reqTotal=CHECKLIST.reduce((a,s)=>a+s.items.filter(i=>i.req).length,0);
+  const reqDone=CHECKLIST.reduce((a,s)=>a+s.items.filter(i=>i.req&&clDone.has(i.id)).length,0);
+  document.getElementById('content').innerHTML=`
+  <div style="max-width:680px">
+    <div class="card" style="margin-bottom:14px;padding:16px 20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div><div style="font-size:15px;font-weight:700;color:var(--t1)">${done}/${total} completed</div><div style="font-size:11px;color:var(--t3);margin-top:1px">${reqDone}/${reqTotal} required items done</div></div>
+        <div style="font-size:24px;font-weight:700;color:${pct>=100?'var(--tgreen)':pct>=60?'var(--tamber)':'var(--tred)'}">${pct}%</div>
+      </div>
+      <div style="height:8px;background:var(--b2);border-radius:4px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${pct>=100?'var(--green)':pct>=60?'var(--amber)':'var(--blue)'};border-radius:4px;transition:width .6s"></div>
+      </div>
+      <div style="display:flex;gap:16px;margin-top:8px;font-size:10px;color:var(--t3)">
+        <span><span style="color:var(--tgreen)">■</span> Required items</span>
+        <span><span style="color:var(--tamber)">■</span> = Required</span>
+        <span>Est. total cost: <strong style="color:var(--t1)">$2,200-5,500 first year</strong></span>
+      </div>
+    </div>
+    <div id="cl-body">${renderChecklistSections()}</div>
+  </div>`;
+}
+function renderChecklistSections(){
+  return CHECKLIST.map(sec=>{
+    const done=sec.items.filter(i=>clDone.has(i.id)).length;
+    const isOpen=clOpen.has(sec.sec);
+    return`<div class="cl-section">
+      <div class="cl-header" onclick="toggleSection('${sec.sec.replace(/'/g,"\'")}')">
+        <div class="cl-dot" style="background:${sec.cl}"></div>
+        <div class="cl-title">${sec.sec}</div>
+        <div class="cl-progress">${done}/${sec.items.length}</div>
+        <div style="width:60px;height:4px;background:var(--b2);border-radius:2px;margin:0 8px;overflow:hidden"><div style="width:${Math.round((done/sec.items.length)*100)}%;height:100%;background:${sec.cl};border-radius:2px"></div></div>
+        <i class="ti ti-chevron-right cl-chevron${isOpen?' open':''}"></i>
+      </div>
+      ${isOpen?`<div class="cl-items">${sec.items.map(item=>{
+        const isDone=clDone.has(item.id);
+        return`<div class="cl-item">
+          <div class="cl-cb${isDone?' done':item.req?' req':''}" onclick="toggleCl('${item.id}')">${isDone?'<i class="ti ti-check" style="font-size:10px"></i>':''}</div>
+          <div class="cl-info">
+            <div class="cl-item-title" style="${isDone?'text-decoration:line-through;color:var(--t3)':''}">${item.title}${item.req?'<span class="cl-req-badge">Required</span>':''}</div>
+            <div class="cl-item-detail">${item.detail}</div>
+          </div>
+          <div class="cl-cost">${item.cost}</div>
+        </div>`;}).join('')}</div>`:''}
+    </div>`;
+  }).join('');
+}
+function toggleSection(sec){
+  if(clOpen.has(sec))clOpen.delete(sec);else clOpen.add(sec);
+  const el=document.getElementById('cl-body');
+  if(el)el.innerHTML=renderChecklistSections();
+}
+function toggleCl(id){
+  if(clDone.has(id))clDone.delete(id);else clDone.add(id);
+  saveAll();
+  if(page==='checklist')rChecklist();
+}
+
+// ============================================================
+// OUTREACH GENERATOR VIEW
+// ============================================================
+const OU_TEMPLATES={
+  cold_call:{label:'Cold Call Script',ic:'ti-phone',fn:(d)=>`COLD CALL SCRIPT
+${'─'.repeat(38)}
+OPENING — First 10 seconds:
+"Hi, is this the logistics or shipping manager?
+Great — my name is ${d.name||'[Your Name]'}, I'm a freight broker
+specializing in ${(d.equip||'dry van').replace(/_/g,' ')} freight.
+I work with ${d.industry||'companies'} moving freight
+${d.orig&&d.dest?d.orig+'→'+d.dest:'across national lanes'}.
+Do you have 2 minutes?"
+
+QUALIFYING QUESTIONS:
+• "How many loads do you ship per month?"
+• "Who are you currently using for trucking?"
+• "What's your biggest frustration with them?"
+• "What lanes are you running most frequently?"
+• "Are you the decision-maker on freight?"
+
+YOUR VALUE PITCH:
+"We specialize in ${(d.equip||'dry van').replace(/_/g,' ')} freight
+${d.orig&&d.dest?'on the '+d.orig+'→'+d.dest+' corridor':'across national lanes'}.
+My carrier network gets loads covered faster
+and at better rates than the big brokers.
+I do the work so you don't chase trucks."
+
+CLOSE:
+"Can I get your email to send a rate on
+your next load? Takes me 10 minutes."
+
+OBJECTION HANDLERS:
+"We have a broker already"
+→ "Most of my best clients said the same.
+   Would you be open to a backup quote?"
+
+"Send me an email"
+→ "Absolutely — best address? And what
+   lane should I quote you first?"
+
+"Not interested"
+→ "No problem. If things change, here's
+   my number. [give card or repeat number]"
+
+NOTE: Speak slowly. Smile — they can hear it.`
+  },
+  cold_email:{label:'Cold Email',ic:'ti-mail',fn:(d)=>`SUBJECT: ${(d.equip||'Freight').replace(/_/g,' ').replace(/\w/g,l=>l.toUpperCase())} capacity — ${d.orig&&d.dest?d.orig+'→'+d.dest:(d.industry||'your lanes')}
+
+Hi ${d.contact||'[First Name]'},
+
+I specialize in ${(d.equip||'dry van').replace(/_/g,' ')} freight for ${d.industry||'shippers'} like ${d.company||'your company'}${d.orig&&d.dest?' on the '+d.orig+'→'+d.dest+' lane':' across national corridors'}.
+
+I work with a tight carrier network and typically cover loads within 2 hours. My clients tell me the difference is simple: I answer the phone, I pick up the load, and I don't disappear.
+
+Worth a 10-minute call this week? I'd love to put a competitive rate together for your next load — no obligation.
+
+${d.name||'[Your Name]'}
+Freight Broker
+[Your Phone]
+
+P.S. If timing isn't right, happy to be your backup when your current broker falls short.`
+  },
+  linkedin:{label:'LinkedIn Message',ic:'ti-brand-linkedin',fn:(d)=>`Hi ${d.contact||'[Name]'} — I'm ${d.name||'[Your Name]'}, a freight broker specializing in ${d.industry||'your industry'}.
+
+I help companies move ${(d.equip||'dry van').replace(/_/g,' ')} freight${d.orig&&d.dest?' on the '+d.orig+'→'+d.dest+' corridor':' nationally'} without the usual broker headaches.
+
+Noticed ${d.company||'your company'} and wanted to reach out directly. Would you be open to a quick conversation? No pitch — just want to understand what you're shipping and see if there's a fit.`
+  },
+  followup:{label:'Follow-up Email',ic:'ti-mail-forward',fn:(d)=>`SUBJECT: Re: Freight coverage for ${d.company||'your company'}
+
+Hi ${d.contact||'[First Name]'},
+
+Following up on my earlier note. I know your inbox stays full — just didn't want this to get buried.
+
+I work with ${d.industry||'shippers'} moving ${(d.equip||'dry van').replace(/_/g,' ')} freight${d.orig&&d.dest?' — specifically the '+d.orig+'→'+d.dest+' lane':''} and the feedback I consistently get is faster coverage and fewer surprises.
+
+Happy to put together a no-obligation rate on your next load. Takes me 10 minutes and you'll at least have a solid benchmark.
+
+Worth a quick reply?
+
+${d.name||'[Your Name]'}
+[Your Phone]`
+  },
+  voicemail:{label:'Voicemail Script',ic:'ti-microphone',fn:(d)=>`VOICEMAIL — Keep it under 25 seconds:
+
+"Hi, this message is for the logistics
+team at ${d.company||'[Company Name]'}.
+
+My name is ${d.name||'[Your Name]'}, I'm a freight broker
+specializing in ${(d.equip||'dry van').replace(/_/g,' ')} freight
+${d.orig&&d.dest?'— '+d.orig+' to '+d.dest+' —':''}.
+
+I'd love to put a competitive rate together.
+My number is [YOUR NUMBER] —
+again that's [YOUR NUMBER].
+
+I'll follow up by email too. Thanks."
+
+TIP: Speak slowly. Say your number TWICE.
+Practice it before you call — time yourself.`
+  },
+};
+let ouMode='cold_call';
+function rOutreach(){
+  document.getElementById('content').innerHTML=`
+  <div style="display:grid;grid-template-columns:240px 1fr;gap:14px;max-width:900px">
+    <div>
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title" style="margin-bottom:10px">Script Type</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${Object.entries(OU_TEMPLATES).map(([key,t])=>`<button class="ou-mode-btn${ouMode===key?' active':''}" onclick="setOuMode('${key}')"><i class="ti ${t.ic}"></i>${t.label}</button>`).join('')}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:10px">Customize</div>
+        ${[['Your Name','ou-name','Your Name'],['Shipper Company','ou-company','Acme Logistics'],['Contact Name','ou-contact','John'],['Industry','ou-ind','Manufacturing'],['Equipment','ou-equip','dry_van'],['Origin State','ou-orig','IL'],['Dest State','ou-dest','TX']].map(([l,id,ph])=>
+          id==='ou-equip'?`<div class="fg"><label class="fl">${l}</label><select class="fi" id="${id}" onchange="ouUpdate()"><option value="dry_van">Dry Van</option><option value="reefer">Reefer</option><option value="flatbed">Flatbed</option><option value="tanker">Tanker</option><option value="ltl">LTL</option><option value="expedited">Expedited</option></select></div>`:
+          `<div class="fg"><label class="fl">${l}</label><input class="fi" id="${id}" placeholder="${ph}" oninput="ouUpdate()"></div>`
+        ).join('')}
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="card-title">${OU_TEMPLATES[ouMode].label}</div>
+          <div style="display:flex;gap:7px">
+            <button class="btn-copy" onclick="ouCopy()"><i class="ti ti-copy"></i> Copy</button>
+            <span id="ou-copied" style="font-size:10px;color:var(--tgreen);align-self:center;display:none"><i class="ti ti-check"></i> Copied!</span>
+          </div>
+        </div>
+        <div class="ou-script" id="ou-output">${ouGenerate()}</div>
+      </div>
+    </div>
+  </div>`;
+}
+function ouGetData(){return{
+  name:document.getElementById('ou-name')?.value||'',
+  company:document.getElementById('ou-company')?.value||'',
+  contact:document.getElementById('ou-contact')?.value||'',
+  industry:document.getElementById('ou-ind')?.value||'',
+  equip:document.getElementById('ou-equip')?.value||'dry_van',
+  orig:document.getElementById('ou-orig')?.value?.toUpperCase()||'',
+  dest:document.getElementById('ou-dest')?.value?.toUpperCase()||'',
+};}
+function ouGenerate(){
+  const d=ouGetData();
+  const raw=OU_TEMPLATES[ouMode]?.fn(d)||'';return raw.split('\n').join('<br>');
+}
+function setOuMode(mode){ouMode=mode;if(page==='outreach')rOutreach();}
+function ouUpdate(){const el=document.getElementById('ou-output');if(el)el.innerHTML=ouGenerate();}
+function ouCopy(){
+  const d=ouGetData();
+  const txt=OU_TEMPLATES[ouMode]?.fn(d)||'';
+  navigator.clipboard?.writeText(txt).then(()=>{
+    const el=document.getElementById('ou-copied');
+    if(el){el.style.display='flex';setTimeout(()=>el.style.display='none',2000);}
+  });
+}
+
+// ============================================================
+// RATE QUOTING VIEW
+// ============================================================
+let qtHistory=[],qtSeq=1000;
+function qtNum(){return'QT-'+String(++qtSeq).padStart(5,'0');}
+function rQuoting(){
+  document.getElementById('content').innerHTML=`
+  <div style="display:grid;grid-template-columns:360px 1fr;gap:14px;max-width:960px;align-items:start">
+    <div>
+      <div class="card" style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="card-title">Rate Quote Builder</div>
+          <button class="btn-sm" onclick="qtClear()"><i class="ti ti-refresh"></i> Clear</button>
+        </div>
+        <div class="la-section" style="margin-top:0;border-top:none;padding-top:0">Shipper Info</div>
+        <div class="fi-row">
+          <div class="fg"><label class="fl">Company Name</label><input class="fi" id="qt-co" placeholder="Acme Logistics" oninput="qtPreview()"></div>
+          <div class="fg"><label class="fl">Contact Name</label><input class="fi" id="qt-ct" placeholder="John Davis" oninput="qtPreview()"></div>
+        </div>
+        <div class="la-section">Lane Details</div>
+        <div class="fi-row">
+          <div class="fg"><label class="fl">Origin City</label><input class="fi" id="qt-oc" placeholder="Chicago" oninput="qtPreview()"></div>
+          <div class="fg"><label class="fl">Origin State</label><input class="fi" id="qt-os" placeholder="IL" maxlength="2" oninput="this.value=this.value.toUpperCase();qtPreview()"></div>
+        </div>
+        <div class="fi-row">
+          <div class="fg"><label class="fl">Dest City</label><input class="fi" id="qt-dc" placeholder="Dallas" oninput="qtPreview()"></div>
+          <div class="fg"><label class="fl">Dest State</label><input class="fi" id="qt-ds" placeholder="TX" maxlength="2" oninput="this.value=this.value.toUpperCase();qtPreview()"></div>
+        </div>
+        <div class="la-section">Shipment</div>
+        <div class="fi-row">
+          <div class="fg"><label class="fl">Equipment</label><select class="fi" id="qt-eq" onchange="qtPreview()"><option value="Dry Van">Dry Van</option><option value="Reefer">Reefer</option><option value="Flatbed">Flatbed</option><option value="Step Deck">Step Deck</option><option value="Tanker">Tanker</option><option value="LTL">LTL</option><option value="Expedited">Expedited</option></select></div>
+          <div class="fg"><label class="fl">Miles</label><input class="fi" id="qt-mi" type="number" placeholder="781" oninput="qtPreview()"></div>
+        </div>
+        <div class="fi-row">
+          <div class="fg"><label class="fl">Commodity</label><input class="fi" id="qt-cm" placeholder="Retail Goods" oninput="qtPreview()"></div>
+          <div class="fg"><label class="fl">Weight (lbs)</label><input class="fi" id="qt-wt" type="number" placeholder="44000" oninput="qtPreview()"></div>
+        </div>
+        <div class="fi-row">
+          <div class="fg"><label class="fl">Pickup Date</label><input class="fi" id="qt-pd" type="date" oninput="qtPreview()"></div>
+          <div class="fg"><label class="fl">Delivery Date</label><input class="fi" id="qt-dd" type="date" oninput="qtPreview()"></div>
+        </div>
+        <div class="la-section">Rate</div>
+        <div class="fi-row">
+          <div class="fg fi-pre"><label class="fl">Your Rate (all-in)</label><span class="fi-sym">$</span><input class="fi" id="qt-rt" type="number" placeholder="2400" oninput="qtPreview()"></div>
+          <div class="fg"><label class="fl">Valid for (days)</label><input class="fi" id="qt-vd" type="number" placeholder="3" value="3" oninput="qtPreview()"></div>
+        </div>
+        <div class="fg"><label class="fl">Your Name</label><input class="fi" id="qt-br" placeholder="Your Name" oninput="qtPreview()"></div>
+        <div class="fg"><label class="fl">Notes (optional)</label><input class="fi" id="qt-nt" placeholder="Tarped, no driver unload, etc." oninput="qtPreview()"></div>
+        <button class="btn-analyze" onclick="qtSave()"><i class="ti ti-file-plus"></i> Generate & Save Quote</button>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div class="card-title">Quote History</div><span style="font-size:10px;color:var(--t3)">${qtHistory.length} saved</span></div>
+        <div id="qt-hist">${qtRenderHistory()}</div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="card-title">Quote Preview</div>
+        <div style="display:flex;gap:7px">
+          <button class="btn-copy" onclick="qtCopy()"><i class="ti ti-copy"></i> Copy</button>
+          <button class="btn" onclick="qtPrint()" style="padding:5px 12px;font-size:11px"><i class="ti ti-printer"></i> Print</button>
+          <span id="qt-copied" style="font-size:10px;color:var(--tgreen);align-self:center;display:none"><i class="ti ti-check"></i> Copied!</span>
+        </div>
+      </div>
+      <div class="qt-quote-display" id="qt-preview">${qtBuild()}</div>
+    </div>
+  </div>`;
+  document.getElementById('qt-pd').value=new Date().toISOString().split('T')[0];
+  qtPreview();
+}
+function qtGetVals(){return{
+  co:document.getElementById('qt-co')?.value||'',
+  ct:document.getElementById('qt-ct')?.value||'',
+  oc:document.getElementById('qt-oc')?.value||'',
+  os:document.getElementById('qt-os')?.value||'',
+  dc:document.getElementById('qt-dc')?.value||'',
+  ds:document.getElementById('qt-ds')?.value||'',
+  eq:document.getElementById('qt-eq')?.value||'Dry Van',
+  mi:parseFloat(document.getElementById('qt-mi')?.value)||0,
+  cm:document.getElementById('qt-cm')?.value||'General Freight',
+  wt:parseInt(document.getElementById('qt-wt')?.value)||0,
+  pd:document.getElementById('qt-pd')?.value||'',
+  dd:document.getElementById('qt-dd')?.value||'',
+  rt:parseFloat(document.getElementById('qt-rt')?.value)||0,
+  vd:parseInt(document.getElementById('qt-vd')?.value)||3,
+  br:document.getElementById('qt-br')?.value||'',
+  nt:document.getElementById('qt-nt')?.value||'',
+};}
+function qtBuild(qnum){
+  const v=qtGetVals();
+  const num=qnum||'[PENDING]';
+  const today=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  const valid=new Date(Date.now()+(v.vd||3)*864e5).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  const rpm=v.rt>0&&v.mi>0?(v.rt/v.mi).toFixed(2):'--';
+  const lines=[
+    'FREIGHT RATE QUOTE',
+    '='.repeat(40),
+    'Quote #:     '+num,
+    'Date:        '+today,
+    'Valid Until: '+valid,
+    '',
+    'SHIPPER',
+    '-'.repeat(40),
+    'Company:     '+(v.co||'[Company Name]'),
+    'Contact:     '+(v.ct||'[Contact Name]'),
+    '',
+    'SHIPMENT DETAILS',
+    '-'.repeat(40),
+    'Origin:      '+(v.oc?v.oc+', ':'')+( v.os||'[State]'),
+    'Destination: '+(v.dc?v.dc+', ':'')+( v.ds||'[State]'),
+    'Equipment:   '+v.eq,
+    'Commodity:   '+v.cm,
+  ];
+  if(v.wt) lines.push('Weight:      '+Number(v.wt).toLocaleString()+' lbs');
+  lines.push('Miles:       '+(v.mi?Number(v.mi).toLocaleString()+' mi':'[Miles]'));
+  if(v.pd) lines.push('Pickup:      '+v.pd);
+  if(v.dd) lines.push('Delivery:    '+v.dd);
+  lines.push('','RATE','-'.repeat(40));
+  lines.push('All-In Rate: '+(v.rt?'$'+Number(v.rt).toLocaleString():'[Rate TBD]'));
+  lines.push('Rate/Mile:   '+(rpm!=='--'?'$'+rpm+'/mi':'[Fill in miles]'));
+  lines.push('Terms:       Net 30 from delivery');
+  if(v.nt){lines.push('','NOTES','-'.repeat(40),v.nt);}
+  lines.push('','ACCEPTANCE','-'.repeat(40));
+  lines.push('Quote valid until '+valid+'. To accept,');
+  lines.push('reply to confirm or sign below.');
+  lines.push('');
+  lines.push('Quoted by: '+(v.br||'[Your Name]'));
+  lines.push('[Your Phone] | [Your Email]');
+  lines.push('','_______________________    __________');
+  lines.push('Shipper Signature           Date');
+  return lines.join('\n');
+}
+function qtPreview(){const el=document.getElementById('qt-preview');if(el)el.textContent=qtBuild();}
+function qtSave(){
+  const v=qtGetVals();
+  if(!v.rt||!v.mi||!v.os||!v.ds){
+    alert('Please fill in: rate, miles, origin state, and destination state');return;
+  }
+  const qnum=qtNum();
+  const built=qtBuild(qnum);
+  qtHistory.unshift({num:qnum,co:v.co,os:v.os,ds:v.ds,rt:v.rt,mi:v.mi,eq:v.eq,ts:Date.now(),text:built});
+  if(qtHistory.length>20)qtHistory.pop();
+  saveAll();
+  const el=document.getElementById('qt-preview');if(el)el.textContent=built;
+  const hEl=document.getElementById('qt-hist');if(hEl)hEl.innerHTML=qtRenderHistory();
+}
+function qtRenderHistory(){
+  if(!qtHistory.length)return'<div style="font-size:10px;color:var(--t3);text-align:center;padding:12px">No quotes saved yet</div>';
+  const tago=ts=>{const s=Math.floor((Date.now()-ts)/1000);return s<60?'just now':s<3600?Math.floor(s/60)+'m ago':Math.floor(s/3600)+'h ago';};
+  return qtHistory.map((q,i)=>`<div class="qt-hist-row" onclick="qtLoad(${i})"><div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:600;color:var(--t1)">${q.num} · ${q.os}→${q.ds} · ${q.eq}</div><div style="font-size:10px;color:var(--t3)">${q.co||'No company'} · $${Number(q.rt).toLocaleString()} · ${tago(q.ts)}</div></div><i class="ti ti-arrow-right" style="font-size:12px;color:var(--t3)"></i></div>`).join('');
+}
+function qtLoad(i){
+  const q=qtHistory[i];
+  const el=document.getElementById('qt-preview');
+  if(el)el.textContent=q.text;
+}
+function qtCopy(){
+  const el=document.getElementById('qt-preview');
+  if(!el)return;
+  navigator.clipboard?.writeText(el.textContent).then(()=>{
+    const c=document.getElementById('qt-copied');
+    if(c){c.style.display='flex';setTimeout(()=>c.style.display='none',2000);}
+  });
+}
+function qtClear(){
+  ['qt-co','qt-ct','qt-oc','qt-os','qt-dc','qt-ds','qt-mi','qt-cm','qt-wt','qt-pd','qt-dd','qt-rt','qt-br','qt-nt'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const eq=document.getElementById('qt-eq');if(eq)eq.value='Dry Van';
+  const vd=document.getElementById('qt-vd');if(vd)vd.value='3';
+  qtPreview();
+}
+function qtPrint(){
+  const el=document.getElementById('qt-preview');
+  if(!el)return;
+  const w=window.open('','_blank');
+  w.document.write('<pre style="font-family:monospace;font-size:13px;padding:30px;white-space:pre-wrap">'+el.textContent+'</pre>');
+  w.document.close();w.print();
+}
+
+// Load saved data on startup
+const _loaded = loadAll();
+// Update logo name if org settings were saved
+const _logoEl = document.querySelector('.logo-name');
+if (_logoEl && orgSettings.name) _logoEl.textContent = orgSettings.name;
+rNav();
+rDash();
+// Show subtle save indicator if data was loaded
+if (_loaded) {
+  const _st = getSaveStatus();
+  const _ind = document.createElement('div');
+  _ind.style.cssText = 'position:fixed;bottom:14px;right:14px;background:rgba(5,150,105,0.15);border:1px solid rgba(52,211,153,0.3);color:#34d399;font-size:11px;padding:6px 12px;border-radius:6px;z-index:999;font-family:sans-serif;pointer-events:none';
+  _ind.textContent = '✓ Data restored' + (_st ? ' · saved ' + _st.toLocaleTimeString() : '');
+  document.body.appendChild(_ind);
+  setTimeout(() => _ind.remove(), 3000);
+}
+</script>
+</body>
+</html>
