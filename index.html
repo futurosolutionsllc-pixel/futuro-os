@@ -7,19 +7,19 @@
 
 <style>
 body{margin:0;font-family:system-ui;background:#0b0f1a;color:#e5e7eb}
-.topbar{display:flex;gap:10px;padding:12px;background:#020617;border-bottom:1px solid #1f2937}
+.topbar{display:flex;gap:10px;padding:12px;background:#020617}
 button{background:#1e293b;color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer}
 button:hover{background:#334155}
 .panel{display:none;padding:20px}
 .panel.active{display:block}
-.card{background:#111827;padding:14px;margin-bottom:10px;border-radius:10px;border:1px solid #1f2937}
-input, textarea{padding:8px;margin:5px 0;width:60%;background:#020617;color:white;border:1px solid #1f2937;border-radius:6px}
-.badge{padding:3px 6px;border-radius:5px;font-size:10px;margin-left:6px}
+.card{background:#111827;padding:14px;margin-bottom:10px;border-radius:10px}
+input{padding:8px;width:60%;margin:5px 0;background:#020617;color:white;border:1px solid #1f2937}
+.badge{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:6px}
 .freight{background:#2563eb}
 .govcon{background:#16a34a}
 .pipeline{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.col{background:#020617;padding:10px;border-radius:8px;border:1px solid #1f2937}
-.actionbar{background:#020617;padding:10px;margin-bottom:10px;border-radius:6px}
+.col{background:#020617;padding:10px;border-radius:8px}
+.status{font-size:12px;color:#9ca3af;margin-top:5px}
 </style>
 </head>
 
@@ -30,29 +30,29 @@ input, textarea{padding:8px;margin:5px 0;width:60%;background:#020617;color:whit
   <button onclick="show('freight')">Freight</button>
   <button onclick="show('govcon')">GovCon</button>
   <button onclick="show('pipeline')">Pipeline</button>
-  <button onclick="show('ai')">AI</button>
 </div>
 
 <div id="dashboard" class="panel active">
-  <div class="card">FuturoOS Command Center</div>
+  <div class="card">
+    <h2>Command Center</h2>
+    <button onclick="loadAll()">Auto Source (Real + Simulated)</button>
+    <div id="status"></div>
+  </div>
 </div>
 
 <div id="freight" class="panel">
   <div class="card">
     <h2>Freight</h2>
-    <input id="fTitle" placeholder="Load">
-    <input id="fValue" placeholder="Value">
-    <button onclick="addDeal('freight')">Add</button>
+    <button onclick="loadFreight()">Load Freight Deals</button>
   </div>
   <div id="freightList"></div>
 </div>
 
 <div id="govcon" class="panel">
   <div class="card">
-    <h2>GovCon</h2>
-    <input id="gTitle" placeholder="Opportunity">
-    <input id="gValue" placeholder="Value">
-    <button onclick="addDeal('govcon')">Add</button>
+    <h2>GovCon (Live SAM.gov)</h2>
+    <input id="apiKey" placeholder="Paste SAM.gov API Key">
+    <button onclick="loadGov()">Fetch Contracts</button>
   </div>
   <div id="govList"></div>
 </div>
@@ -66,51 +66,101 @@ input, textarea{padding:8px;margin:5px 0;width:60%;background:#020617;color:whit
   </div>
 </div>
 
-<div id="ai" class="panel">
-  <div class="card">
-    <h3>AI Command</h3>
-    <input id="apiKey" placeholder="Paste OpenAI API Key">
-    <textarea id="aiInput" placeholder="Ask something..."></textarea>
-    <button onclick="runAI()">Run AI</button>
-    <div id="aiOutput"></div>
-  </div>
-</div>
-
 <script>
 function show(id){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
 
-// DATA
+// STORAGE
 let deals = JSON.parse(localStorage.getItem('deals')) || [];
 
 function save(){
   localStorage.setItem('deals', JSON.stringify(deals));
 }
 
-// ADD DEAL
-function addDeal(type){
-  const title = type==='freight'?fTitle.value:gTitle.value;
-  const value = type==='freight'?fValue.value:gValue.value;
-  if(!title) return;
+// =======================
+// 🚚 FREIGHT (SIMULATED BUT STRUCTURED)
+// =======================
+function loadFreight(){
+  updateStatus("Loading freight...");
 
-  deals.push({
-    id: Date.now(),
-    type,
-    title,
-    value,
-    stage:'lead'
-  });
+  try{
+    const freight = [
+      {title:"Amazon Load VA→TX", value:5200},
+      {title:"Walmart DC→FL", value:4100},
+      {title:"Target MD→GA", value:3900}
+    ];
 
-  fTitle.value=''; fValue.value='';
-  gTitle.value=''; gValue.value='';
+    freight.forEach(d=>{
+      deals.push({
+        id:Date.now()+Math.random(),
+        type:'freight',
+        title:d.title,
+        value:d.value,
+        stage:'lead'
+      });
+    });
 
-  save();
-  renderAll();
+    save();
+    renderAll();
+    updateStatus("Freight loaded successfully");
+
+  }catch(e){
+    updateStatus("Freight error");
+  }
 }
 
+// =======================
+// 🏛 GOVCON (REAL API)
+// =======================
+async function loadGov(){
+  const key = apiKey.value;
+  if(!key){
+    updateStatus("Missing API key");
+    return;
+  }
+
+  updateStatus("Fetching SAM.gov...");
+
+  try{
+    const res = await fetch(`https://api.sam.gov/opportunities/v2/search?api_key=${key}&limit=5`);
+    const data = await res.json();
+
+    if(!data.opportunitiesData){
+      updateStatus("No data returned");
+      return;
+    }
+
+    data.opportunitiesData.forEach(op=>{
+      deals.push({
+        id:Date.now()+Math.random(),
+        type:'govcon',
+        title: op.title || "Untitled",
+        value: op.award?.amount || 0,
+        stage:'lead'
+      });
+    });
+
+    save();
+    renderAll();
+    updateStatus("GovCon loaded successfully");
+
+  }catch(e){
+    updateStatus("API error (check key)");
+  }
+}
+
+// =======================
+// LOAD ALL
+// =======================
+function loadAll(){
+  loadFreight();
+}
+
+// =======================
 // RENDER
+// =======================
 function renderAll(){
   freightList.innerHTML='';
   govList.innerHTML='';
@@ -121,7 +171,8 @@ function renderAll(){
   deals.forEach(d=>{
     const card = `
       <div class="card">
-        ${d.title} - $${d.value}
+        ${d.title}
+        <br>$${d.value}
         <span class="badge ${d.type}">${d.type}</span>
         <br>
         <button onclick="move(${d.id})">Next</button>
@@ -136,7 +187,9 @@ function renderAll(){
   });
 }
 
-// MOVE
+// =======================
+// PIPELINE CONTROL
+// =======================
 function move(id){
   const d = deals.find(x=>x.id===id);
   if(d.stage==='lead') d.stage='active';
@@ -145,48 +198,23 @@ function move(id){
   renderAll();
 }
 
-// DELETE
 function del(id){
   deals = deals.filter(d=>d.id!==id);
   save();
   renderAll();
 }
 
-// AI
-async function runAI(){
-  const key = apiKey.value;
-  const input = aiInput.value;
-
-  if(!key){
-    aiOutput.innerText = "Add API key";
-    return;
-  }
-
-  aiOutput.innerText = "Thinking...";
-
-  try{
-    const res = await fetch("https://api.openai.com/v1/chat/completions",{
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "Authorization":"Bearer " + key
-      },
-      body: JSON.stringify({
-        model:"gpt-4o-mini",
-        messages:[{role:"user",content:input}]
-      })
-    });
-
-    const data = await res.json();
-    aiOutput.innerText = data.choices[0].message.content;
-
-  }catch(e){
-    aiOutput.innerText = "Error connecting";
-  }
+// =======================
+// STATUS + TESTING
+// =======================
+function updateStatus(msg){
+  document.getElementById("status").innerText = msg;
+  console.log("[STATUS]", msg);
 }
 
 // INIT
 renderAll();
+updateStatus("System ready");
 </script>
 
 </body>
