@@ -6,47 +6,19 @@
 <title>FuturoOS</title>
 
 <style>
-body {
-  margin:0;
-  font-family: Arial, sans-serif;
-  background:#0f172a;
-  color:white;
-}
-
-.topbar {
-  display:flex;
-  gap:10px;
-  padding:10px;
-  background:#020617;
-}
-
-button {
-  background:#1e293b;
-  color:white;
-  border:none;
-  padding:8px 12px;
-  cursor:pointer;
-}
-
-button:hover {
-  background:#334155;
-}
-
-.panel {
-  display:none;
-  padding:20px;
-}
-
-.panel.active {
-  display:block;
-}
-
-.card {
-  background:#1e293b;
-  padding:15px;
-  margin-bottom:10px;
-  border-radius:8px;
-}
+body{margin:0;font-family:Arial;background:#0f172a;color:#fff}
+.topbar{display:flex;gap:10px;padding:10px;background:#020617}
+button{background:#1e293b;color:white;border:none;padding:8px 12px;cursor:pointer}
+button:hover{background:#334155}
+.panel{display:none;padding:20px}
+.panel.active{display:block}
+.card{background:#1e293b;padding:15px;margin-bottom:10px;border-radius:8px}
+input, textarea{padding:8px;margin:5px 0;width:70%}
+.badge{padding:2px 6px;border-radius:4px;font-size:10px;margin-left:6px}
+.freight{background:#2563eb}
+.govcon{background:#16a34a}
+.pipeline{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.col{background:#020617;padding:10px;border-radius:8px}
 </style>
 </head>
 
@@ -61,37 +33,48 @@ button:hover {
 </div>
 
 <div id="dashboard" class="panel active">
-  <div class="card">Dashboard Overview</div>
+  <div class="card">FuturoOS Dashboard</div>
 </div>
 
+<!-- FREIGHT -->
 <div id="freight" class="panel">
-  <div class="card">Freight Module (base)</div>
+  <div class="card">
+    <h2>Freight Deals</h2>
+    <input id="fTitle" placeholder="Load name">
+    <input id="fValue" placeholder="Value">
+    <button onclick="addFreight()">Add</button>
+  </div>
+  <div id="freightList"></div>
 </div>
 
+<!-- GOVCON -->
 <div id="govcon" class="panel">
   <div class="card">
-    <h2>GovCon Workspace</h2>
-    <p>Opportunities, contracts, pipeline tracking will go here.</p>
-  </div>
-
-  <div class="card">
-    <input id="govInput" placeholder="Add opportunity..." style="padding:8px;width:70%">
+    <h2>GovCon Opportunities</h2>
+    <input id="gTitle" placeholder="Opportunity">
+    <input id="gValue" placeholder="Value">
     <button onclick="addGov()">Add</button>
   </div>
-
   <div id="govList"></div>
 </div>
 
+<!-- PIPELINE -->
 <div id="pipeline" class="panel">
-  <div class="card">Unified Pipeline (coming next)</div>
+  <h2>Unified Pipeline</h2>
+  <div class="pipeline">
+    <div class="col"><h3>Lead</h3><div id="lead"></div></div>
+    <div class="col"><h3>Active</h3><div id="active"></div></div>
+    <div class="col"><h3>Closed</h3><div id="closed"></div></div>
+  </div>
 </div>
 
+<!-- AI -->
 <div id="ai" class="panel">
   <div class="card">
     <h3>AI Command</h3>
-    <textarea id="aiInput" style="width:100%;height:80px"></textarea>
+    <textarea id="aiInput"></textarea>
     <button onclick="runAI()">Run</button>
-    <div id="aiOutput" style="margin-top:10px;"></div>
+    <div id="aiOutput"></div>
   </div>
 </div>
 
@@ -101,40 +84,115 @@ function show(id){
   document.getElementById(id).classList.add('active');
 }
 
-// GovCon simple system
-let govData = [];
+// MASTER DATA
+let deals = [];
 
-function addGov(){
-  const val = document.getElementById('govInput').value;
-  if(!val) return;
-  govData.push(val);
-  document.getElementById('govInput').value = '';
-  renderGov();
+// ADD FREIGHT
+function addFreight(){
+  const title = document.getElementById('fTitle').value;
+  const value = document.getElementById('fValue').value;
+  if(!title) return;
+
+  deals.push({
+    type:'freight',
+    title,
+    value,
+    stage:'lead'
+  });
+
+  document.getElementById('fTitle').value='';
+  document.getElementById('fValue').value='';
+
+  renderAll();
 }
 
-function renderGov(){
-  const list = document.getElementById('govList');
-  list.innerHTML = '';
-  govData.forEach((item,i)=>{
-    list.innerHTML += `
+// ADD GOVCON
+function addGov(){
+  const title = document.getElementById('gTitle').value;
+  const value = document.getElementById('gValue').value;
+  if(!title) return;
+
+  deals.push({
+    type:'govcon',
+    title,
+    value,
+    stage:'lead'
+  });
+
+  document.getElementById('gTitle').value='';
+  document.getElementById('gValue').value='';
+
+  renderAll();
+}
+
+// RENDER EVERYTHING
+function renderAll(){
+  renderFreight();
+  renderGov();
+  renderPipeline();
+}
+
+// FREIGHT LIST
+function renderFreight(){
+  const box = document.getElementById('freightList');
+  box.innerHTML='';
+
+  deals.filter(d=>d.type==='freight').forEach((d,i)=>{
+    box.innerHTML+=`
       <div class="card">
-        ${item}
-        <button onclick="delGov(${i})">Delete</button>
+        ${d.title} - $${d.value}
+        <span class="badge freight">Freight</span>
+        <button onclick="move(${i})">Next Stage</button>
       </div>
     `;
   });
 }
 
-function delGov(i){
-  govData.splice(i,1);
-  renderGov();
+// GOV LIST
+function renderGov(){
+  const box = document.getElementById('govList');
+  box.innerHTML='';
+
+  deals.filter(d=>d.type==='govcon').forEach((d,i)=>{
+    box.innerHTML+=`
+      <div class="card">
+        ${d.title} - $${d.value}
+        <span class="badge govcon">GovCon</span>
+        <button onclick="move(${i})">Next Stage</button>
+      </div>
+    `;
+  });
 }
 
-// Fake AI (placeholder)
+// PIPELINE
+function renderPipeline(){
+  ['lead','active','closed'].forEach(stage=>{
+    document.getElementById(stage).innerHTML='';
+  });
+
+  deals.forEach((d,i)=>{
+    document.getElementById(d.stage).innerHTML+=`
+      <div class="card">
+        ${d.title}
+        <br>$${d.value}
+        <br><small>${d.type}</small>
+      </div>
+    `;
+  });
+}
+
+// MOVE STAGES
+function move(i){
+  if(deals[i].stage==='lead') deals[i].stage='active';
+  else if(deals[i].stage==='active') deals[i].stage='closed';
+  renderAll();
+}
+
+// AI (placeholder)
 function runAI(){
   const input = document.getElementById('aiInput').value;
   document.getElementById('aiOutput').innerText =
-    "AI Response for: " + input;
+    "AI Insight: " + input + " looks promising.";
 }
 </script>
 
