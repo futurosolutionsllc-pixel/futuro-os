@@ -938,6 +938,32 @@ function buildReceiptPdf(job) {
   doc.text(`Thank you for choosing ${S.settings.company || 'Futuro OS'}.`, M, H - 30);
   return doc.output('blob');
 }
+function dataURLtoBlob(dataURL) {
+  const [meta, b64] = String(dataURL).split(',');
+  const mime = (meta.match(/:(.*?);/) || [])[1] || 'image/jpeg';
+  const bin = atob(b64), arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], {type: mime});
+}
+// Move base64 POD photos into Storage and keep only URLs on the job, so heavy
+// days don't bloat the synced row / localStorage. Best-effort: a failed upload
+// keeps that photo inline. Runs after the PDF is built (it needs the base64).
+async function offloadPodPhotos(job) {
+  if (!(supa && cloudUser)) return;
+  const photos = job.pod && job.pod.photos;
+  if (!Array.isArray(photos) || !photos.length || !String(photos[0]).startsWith('data:')) return;
+  const urls = [];
+  for (const p of photos) {
+    if (!String(p).startsWith('data:')) { urls.push(p); continue; }
+    try {
+      const ppath = 'photos/' + (crypto.randomUUID ? crypto.randomUUID() : 'p' + Date.now() + Math.random().toString(36).slice(2)) + '.jpg';
+      const pu = await supa.storage.from('receipts').upload(ppath, dataURLtoBlob(p), {contentType: 'image/jpeg'});
+      urls.push(pu.error ? p : supa.storage.from('receipts').getPublicUrl(ppath).data.publicUrl);
+    } catch (e) { urls.push(p); }
+  }
+  job.pod.photos = urls;
+  saveJobs();
+}
 async function issueReceipt(job) {
   job.pod = job.pod || {};
   job.pod.receipt = job.pod.receipt || {};
@@ -965,12 +991,16 @@ async function issueReceipt(job) {
     if (bits.length) toast('Receipt ' + bits.join(' + '));
     else if (res && (res.email === 'not_configured' || res.sms === 'not_configured')) toast('Receipt saved · add Resend/Twilio keys to auto-send');
     else toast('Receipt saved');
+    offloadPodPhotos(job); // slim the synced row (PDF already embedded the photos)
   } catch (e) {
     job.pod.receipt.pending = true; saveJobs(); toast('Receipt saved · will send when online');
   }
 }
 function downloadReceipt(id) {
   const j = S.jobs.find(x => x.id === id); if (!j || !j.pod) return;
+  // Prefer the hosted PDF — it has the photos embedded even after they've been
+  // offloaded to Storage URLs (which a local regenerate can't re-embed).
+  if (j.pod.receipt && j.pod.receipt.pdfUrl) { window.open(j.pod.receipt.pdfUrl, '_blank'); return; }
   if (!j.pod.receipt) { j.pod.receipt = {conf: confirmationNumber()}; saveJobs(); }
   try { const blob = buildReceiptPdf(j); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `receipt-${j.pod.receipt.conf}.pdf`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
   catch (e) { toast('PDF failed'); }
@@ -1206,6 +1236,12 @@ function loadSettingsForm() {
   $('sNav').value = s.navApp;
   $('sTmplWay').value = s.tmplWay; $('sTmplArr').value = s.tmplArr; $('sTmplDone').value = s.tmplDone;
   $('sWebhook').value = s.webhookUrl; $('sSamKey').value = s.samKey;
+  // app lock
+  $('sLockMins').value = localStorage.getItem('fos.lockMins') || '0';
+  $('lockStatus').textContent = hasPin() ? 'PIN is set — the app locks when idle.' : 'No PIN set — anyone with this phone can open the app.';
+  $('btnRemovePin').hidden = !hasPin();
+  $('btnLockNow').hidden = !hasPin();
+  $('btnSetPin').innerHTML = hasPin() ? '<i class="ti ti-lock-cog"></i> Change PIN' : '<i class="ti ti-lock-cog"></i> Set PIN';
 }
 async function saveSettingsForm() {
   const s = S.settings;
@@ -1218,6 +1254,7 @@ async function saveSettingsForm() {
   s.navApp = $('sNav').value;
   s.tmplWay = $('sTmplWay').value; s.tmplArr = $('sTmplArr').value; s.tmplDone = $('sTmplDone').value;
   s.webhookUrl = $('sWebhook').value.trim(); s.samKey = $('sSamKey').value.trim();
+  localStorage.setItem('fos.lockMins', $('sLockMins').value);
   if (homeChanged && s.homeAddress) {
     try { const g = await geocode(s.homeAddress); s.homeLat = g.lat; s.homeLng = g.lng;
       $('homeGeoStatus').textContent = `📍 ${g.label}`; }
@@ -1441,6 +1478,66 @@ async function doAuth(signup) {
   } catch (e) { st.textContent = 'Network error — try again.'; }
 }
 
+/* ---------------- app lock (4-digit PIN) ---------------- */
+const LOCK = {entry: '', mode: 'unlock', firstPin: '', locked: false};
+let _bgAt = 0;
+async function sha(s) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function pinSalt() {
+  let s = localStorage.getItem('fos.pinSalt');
+  if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('fos.pinSalt', s); }
+  return s;
+}
+const hasPin = () => !!localStorage.getItem('fos.pinHash');
+function buildKeypad() {
+  const kp = $('keypad'); if (!kp) return;
+  kp.innerHTML = ['1','2','3','4','5','6','7','8','9','','0','⌫']
+    .map(k => k === '' ? '<button class="blank"></button>' : `<button data-k="${k}">${k}</button>`).join('');
+  kp.querySelectorAll('button[data-k]').forEach(b => b.addEventListener('click', () => lockKey(b.dataset.k)));
+}
+function renderDots() {
+  const n = LOCK.entry.length;
+  $('lockDots').innerHTML = Array.from({length: 4}, (_, i) => `<span class="${i < n ? 'on' : ''}"></span>`).join('');
+}
+async function lockKey(k) {
+  $('lockMsg').textContent = '';
+  if (k === '⌫') { LOCK.entry = LOCK.entry.slice(0, -1); renderDots(); return; }
+  if (LOCK.entry.length >= 4) return;
+  LOCK.entry += k; renderDots();
+  if (LOCK.entry.length < 4) return;
+  if (LOCK.mode === 'unlock') {
+    const ok = (await sha(pinSalt() + LOCK.entry)) === localStorage.getItem('fos.pinHash');
+    if (ok) { LOCK.entry = ''; hideLock(); }
+    else { $('lockMsg').textContent = 'Wrong PIN'; LOCK.entry = ''; renderDots(); if (navigator.vibrate) navigator.vibrate(120); }
+  } else if (LOCK.mode === 'set') {
+    LOCK.firstPin = LOCK.entry; LOCK.entry = ''; LOCK.mode = 'confirm';
+    $('lockTitle').textContent = 'Confirm PIN'; $('lockSub').textContent = 'Re-enter to confirm'; renderDots();
+  } else if (LOCK.mode === 'confirm') {
+    if (LOCK.entry === LOCK.firstPin) { await savePin(LOCK.firstPin); }
+    else { $('lockMsg').textContent = "PINs didn't match"; LOCK.entry = ''; LOCK.firstPin = ''; LOCK.mode = 'set';
+      $('lockTitle').textContent = 'Enter new PIN'; renderDots(); }
+  }
+}
+async function savePin(pin) {
+  localStorage.setItem('fos.pinHash', await sha(pinSalt() + pin));
+  LOCK.entry = ''; LOCK.firstPin = ''; LOCK.mode = 'unlock';
+  hideLock(); toast('PIN set — app locks when idle'); loadSettingsForm();
+}
+function showLock(mode) {
+  LOCK.mode = mode || 'unlock'; LOCK.entry = ''; LOCK.firstPin = ''; LOCK.locked = true;
+  const setting = LOCK.mode !== 'unlock';
+  $('lockTitle').textContent = setting ? 'Enter new PIN' : 'Enter PIN';
+  $('lockSub').textContent = setting ? 'Choose a 4-digit PIN' : 'Futuro OS is locked';
+  $('lockMsg').textContent = '';
+  $('lockCancel').hidden = !setting;
+  buildKeypad(); renderDots();
+  $('lockScreen').hidden = false;
+}
+function hideLock() { LOCK.locked = false; $('lockScreen').hidden = true; }
+function lockNow() { if (hasPin()) showLock('unlock'); }
+
 /* ---------------- install (Android one-tap prompt / iOS Share instructions) ---------------- */
 let deferredInstall = null;
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -1539,6 +1636,19 @@ function wire() {
   // Settings
   $('btnSettings').addEventListener('click', () => { loadSettingsForm(); $('settingsSheet').hidden = false; });
   $('btnSaveSettings').addEventListener('click', () => saveSettingsForm());
+  // App lock
+  $('btnSetPin').addEventListener('click', () => { $('settingsSheet').hidden = true; showLock('set'); });
+  $('btnRemovePin').addEventListener('click', () => { if (confirm('Remove the PIN lock?')) { localStorage.removeItem('fos.pinHash'); toast('PIN removed'); loadSettingsForm(); } });
+  $('btnLockNow').addEventListener('click', () => { $('settingsSheet').hidden = true; lockNow(); });
+  $('sLockMins').addEventListener('change', () => localStorage.setItem('fos.lockMins', $('sLockMins').value));
+  $('lockCancel').addEventListener('click', () => { if (LOCK.mode !== 'unlock') hideLock(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { _bgAt = Date.now(); }
+    else if (hasPin() && !LOCK.locked) {
+      const mins = +(localStorage.getItem('fos.lockMins') || '0');
+      if (_bgAt && Date.now() - _bgAt >= mins * 60000) showLock('unlock');
+    }
+  });
   $('btnGeoHome').addEventListener('click', geocodeHome);
   $('btnExport').addEventListener('click', exportJson);
   $('importFile').addEventListener('change', e => { if (e.target.files[0]) importJson(e.target.files[0]); });
@@ -1554,6 +1664,7 @@ function shiftDay(delta) {
 /* ---------------- init ---------------- */
 wire();
 $('brandSub').textContent = 'Mobile Ops — ' + S.settings.company;
+if (hasPin()) showLock('unlock');   // require PIN before the app is usable
 show('today');
 startGps();
 initCloud();

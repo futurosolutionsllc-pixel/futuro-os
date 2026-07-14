@@ -19,8 +19,35 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="styles.css">
+<style>
+  .lock-screen{position:fixed;inset:0;z-index:9999;background:#06080f;display:flex;align-items:center;justify-content:center;padding:24px}
+  .lock-card{width:100%;max-width:320px;text-align:center}
+  .lock-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin:12px 0 4px;color:var(--t1,#e9ecf1)}
+  .lock-sub{font-size:12px;color:var(--t3,#5f6877);margin-bottom:22px}
+  .lock-dots{display:flex;gap:12px;justify-content:center;margin:18px 0;min-height:16px}
+  .lock-dots span{width:14px;height:14px;border-radius:50%;border:2px solid var(--b2,rgba(255,255,255,.2))}
+  .lock-dots span.on{background:var(--hgreen,#2ee6a4);border-color:var(--hgreen,#2ee6a4)}
+  .lock-msg{font-size:12px;color:var(--crit,#f87171);min-height:16px;margin-bottom:10px}
+  .keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:6px}
+  .keypad button{aspect-ratio:1;border-radius:50%;border:1px solid var(--b2,rgba(255,255,255,.14));background:var(--bg4,rgba(255,255,255,.04));color:var(--t1,#e9ecf1);font-size:22px;font-weight:600;cursor:pointer;font-family:inherit}
+  .keypad button:active{background:var(--hgreen,#2ee6a4);color:#06080f}
+  .keypad button.blank{background:transparent;border:none;pointer-events:none}
+</style>
 </head>
 <body>
+
+<!-- ============ APP LOCK (PIN) ============ -->
+<div id="lockScreen" class="lock-screen" hidden>
+  <div class="lock-card">
+    <i class="ti ti-lock" style="font-size:30px;color:var(--hgreen,#2ee6a4)"></i>
+    <div class="lock-title" id="lockTitle">Enter PIN</div>
+    <div class="lock-sub" id="lockSub">Futuro OS is locked</div>
+    <div class="lock-dots" id="lockDots"></div>
+    <div class="lock-msg" id="lockMsg"></div>
+    <div class="keypad" id="keypad"></div>
+    <button id="lockCancel" hidden style="margin-top:16px;background:transparent;border:none;color:var(--t3,#5f6877);font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
+  </div>
+</div>
 
 <header class="appbar">
   <div class="brand">
@@ -285,6 +312,24 @@
         <button class="btn grow" id="btnCloudPush" hidden><i class="ti ti-cloud-up"></i> Sync now</button>
       </div>
       <div class="hint" style="margin-top:8px"><a href="../" style="color:var(--tgreen)">Open Futuro OS desktop →</a></div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <h3>App lock</h3>
+      <div class="hint" id="lockStatus">No PIN set — anyone with this phone can open the app.</div>
+      <label style="margin-top:8px">Auto-lock after
+        <select id="sLockMins" class="input">
+          <option value="0">Immediately (every open)</option>
+          <option value="2">2 minutes</option>
+          <option value="5">5 minutes</option>
+          <option value="15">15 minutes</option>
+          <option value="60">1 hour</option>
+        </select>
+      </label>
+      <div class="row gap8" style="margin-top:8px">
+        <button class="btn grow" id="btnSetPin"><i class="ti ti-lock-cog"></i> Set / change PIN</button>
+        <button class="btn grow" id="btnRemovePin" hidden><i class="ti ti-lock-open"></i> Remove PIN</button>
+      </div>
+      <button class="btn grow" id="btnLockNow" style="margin-top:8px" hidden><i class="ti ti-lock"></i> Lock now</button>
     </div>
     <label>Company name <input id="sCompany" class="input"></label>
     <label>Your phone <input id="sPhone" class="input" inputmode="tel"></label>
