@@ -545,6 +545,7 @@ function openJobSheet(id, prefill) {
   $('jType').value = j?.type || 'delivery';
   $('jName').value = j?.customer || prefill?.customer || '';
   $('jPhone').value = j?.phone || '';
+  $('jEmail').value = j?.email || '';
   $('jAddress').value = j?.address || '';
   $('jDate').value = j?.date || S.date;
   $('jWinS').value = j?.winS || '';
@@ -552,6 +553,9 @@ function openJobSheet(id, prefill) {
   $('jRate').value = j?.rate ?? (prefill?.rate ?? '');
   $('jBarcode').value = j?.barcodeRequired || '';
   $('jNotes').value = j?.notes || '';
+  $('jSecured').checked = !!j?.secured;
+  $('jMinAge').value = j?.minAge || '';
+  $('jMinAgeWrap').hidden = !j?.secured;
   $('geoStatus').textContent = j?.lat != null ? `📍 ${j.lat.toFixed(5)}, ${j.lng.toFixed(5)}` : '';
   $('btnDeleteJob').hidden = !id;
   $('jobSheet').hidden = false;
@@ -577,6 +581,7 @@ async function saveJob() {
   j.type = $('jType').value;
   j.customer = $('jName').value.trim();
   j.phone = $('jPhone').value.trim();
+  j.email = $('jEmail').value.trim();
   const addrChanged = j.address !== $('jAddress').value.trim();
   j.address = $('jAddress').value.trim();
   j.date = $('jDate').value || S.date;
@@ -585,6 +590,8 @@ async function saveJob() {
   j.rate = +$('jRate').value || 0;
   j.barcodeRequired = $('jBarcode').value.trim();
   j.notes = $('jNotes').value.trim();
+  j.secured = $('jSecured').checked;
+  j.minAge = +$('jMinAge').value || 0;
   if (window._pendingGeo) { j.lat = window._pendingGeo.lat; j.lng = window._pendingGeo.lng; }
   else if (addrChanged && j.address) {
     try { const g = await geocode(j.address); j.lat = g.lat; j.lng = g.lng; }
@@ -619,9 +626,22 @@ function openDetail(id) {
     ${j.pod.reason ? `<div class="detail-row"><span>Fail reason</span><span>${esc(j.pod.reason)}</span></div>` : ''}
     ${j.pod.note ? `<div class="detail-row"><span>Note</span><span>${esc(j.pod.note)}</span></div>` : ''}
     ${j.pod.barcodes?.length ? `<div class="detail-row"><span>Barcodes</span><span>${j.pod.barcodes.map(esc).join(', ')}</span></div>` : ''}
+    ${j.pod.idVerify ? `<div class="detail-row"><span>ID verified</span><span>${j.pod.idVerify.verified ? '✓' : '⚠'} ${esc(j.pod.idVerify.method || '')}${j.pod.idVerify.age != null ? ' · age ' + j.pod.idVerify.age : ''}</span></div>` : ''}
     ${j.pod.lat ? `<div class="detail-row"><span>Location</span><span>${j.pod.lat.toFixed(5)}, ${j.pod.lng.toFixed(5)}</span></div>` : ''}
     <div class="detail-photos">${(j.pod.photos || []).map(p => `<img src="${p}" alt="POD photo">`).join('')}</div>
     ${j.pod.signature ? `<img class="detail-sig" src="${j.pod.signature}" alt="Signature">` : ''}` : '';
+  const rc = j.pod && j.pod.receipt;
+  const chStat = s => s === 'sent' ? '✓ sent' : s === 'not_configured' ? 'needs keys' : s === 'skipped' ? '—' : s ? esc(s) : '—';
+  const receiptBlock = (j.status === 'done') ? `
+    <h3 style="margin-top:14px">Customer receipt</h3>
+    ${rc && rc.conf ? `<div class="detail-row"><span>Confirmation</span><span>${esc(rc.conf)}</span></div>` : ''}
+    ${rc && rc.email !== undefined ? `<div class="detail-row"><span>Email</span><span>${chStat(rc.email)}</span></div>` : ''}
+    ${rc && rc.sms !== undefined ? `<div class="detail-row"><span>Text</span><span>${chStat(rc.sms)}</span></div>` : ''}
+    ${rc && rc.pending ? `<div class="detail-row"><span>Status</span><span>pending — not sent yet</span></div>` : ''}
+    <div class="row gap8" style="margin-top:8px">
+      <button class="btn small grow" id="dRcptDl"><i class="ti ti-download"></i> Download PDF</button>
+      <button class="btn small grow success" id="dRcptSend"><i class="ti ti-send"></i> ${rc && rc.sentAt ? 'Resend' : 'Send'}</button>
+    </div>` : '';
   $('detailContent').innerHTML = `
     <div class="stop-name" style="font-size:18px">${esc(j.customer || 'Unnamed')}</div>
     <div class="stop-addr" style="white-space:normal">${esc(j.address || '')}</div>
@@ -633,21 +653,32 @@ function openDetail(id) {
     </div>
     ${rows.map(r => `<div class="detail-row"><span>${r[0]}</span><span>${esc(r[1])}</span></div>`).join('')}
     ${pod}
+    ${receiptBlock}
     ${events ? `<h3 style="margin-top:14px">Activity</h3>${events}` : ''}`;
   $('detailSheet').hidden = false;
   $('dEdit').onclick = () => { $('detailSheet').hidden = true; openJobSheet(id); };
   $('dNav').onclick = () => window.open(navLink(j), '_blank');
   const dPod = $('dPod'); if (dPod) dPod.onclick = () => { $('detailSheet').hidden = true; openPod(id); };
   const dRe = $('dReopen'); if (dRe) dRe.onclick = () => { j.status = 'pending'; j.pod = null; saveJobs(); $('detailSheet').hidden = true; render(); };
+  const dDl = $('dRcptDl'); if (dDl) dDl.onclick = () => downloadReceipt(id);
+  const dSend = $('dRcptSend'); if (dSend) dSend.onclick = () => resendReceipt(id);
 }
 
 /* ---------------- POD ---------------- */
 const pod = {photos: [], signature: null, barcodes: [], drawn: false};
+let idv = null, idStream = null;   // ID-verification result + scanner stream (secured deliveries)
 function openPod(id) {
   const j = S.jobs.find(x => x.id === id);
   if (!j) return;
   S.podJobId = id;
   pod.photos = []; pod.signature = null; pod.barcodes = []; pod.drawn = false;
+  idv = null;
+  const secured = !!j.secured;
+  $('podIdBlock').hidden = !secured;
+  $('idResult').innerHTML = '';
+  $('idScanStatus').textContent = '';
+  $('idVideo').hidden = true;
+  $('podIdReq').textContent = secured ? (j.minAge ? `required · ${j.minAge}+` : 'required') : '';
   $('podJobLine').textContent = `${j.customer || ''} — ${j.address || ''}`;
   $('podPhotos').innerHTML = '';
   $('podPhotoCount').textContent = '';
@@ -738,6 +769,9 @@ function finishPod(failed) {
   if (!failed && j.barcodeRequired && !pod.barcodes.includes(j.barcodeRequired)) {
     if (!confirm(`Required barcode ${j.barcodeRequired} not scanned. Complete anyway?`)) return;
   }
+  if (!failed && j.secured && (!idv || !idv.verified)) {
+    if (!confirm('Recipient ID is not verified. Complete this secured delivery anyway?')) return;
+  }
   let reason = '';
   if (failed) {
     reason = prompt('Reason (no answer / refused / wrong address / other):', 'no answer') || 'unspecified';
@@ -749,6 +783,7 @@ function finishPod(failed) {
     barcodes: pod.barcodes,
     note: $('podNote').value.trim(),
     reason,
+    idVerify: (!failed && j.secured) ? idv : null,
     t: new Date().toISOString(),
     lat: S.pos?.lat ?? null, lng: S.pos?.lng ?? null
   };
@@ -759,13 +794,190 @@ function finishPod(failed) {
     j.pod.photos = []; saveJobs(); toast('Storage full — photos not saved');
   }
   fireWebhook(failed ? 'job.failed' : 'job.completed', j);
-  stopScan();
+  stopScan(); stopIdScan();
   $('podSheet').hidden = true;
   toast(failed ? 'Marked failed' : '✓ Delivered');
-  if (!failed && j.phone && confirm('Send "delivery complete" text to customer?')) {
-    sendSms(j, S.settings.tmplDone, 'completed');
-  }
   render();
+  // Completed deliveries mint a confirmation number + PDF receipt and email/text
+  // the customer (best-effort; degrades gracefully offline or before keys are set).
+  if (!failed) issueReceipt(j);
+}
+
+/* ---------------- ID verification (secured deliveries) ---------------- */
+// Parse the PDF417 barcode on the back of a US/CA driver license (AAMVA).
+function parseAAMVA(raw) {
+  const get = code => { const m = String(raw).match(new RegExp(code + '([^\\n\\r]*)')); return m ? m[1].trim() : ''; };
+  const parseDate = s => {
+    s = (s || '').replace(/\D/g, ''); if (s.length !== 8) return null;
+    let mo = +s.slice(0, 2), da = +s.slice(2, 4), yr = +s.slice(4, 8);          // MMDDYYYY (US)
+    if (mo >= 1 && mo <= 12 && da >= 1 && da <= 31 && yr >= 1900 && yr <= 2100) return new Date(yr, mo - 1, da);
+    yr = +s.slice(0, 4); mo = +s.slice(4, 6); da = +s.slice(6, 8);              // YYYYMMDD (CA)
+    if (mo >= 1 && mo <= 12 && da >= 1 && da <= 31 && yr >= 1900 && yr <= 2100) return new Date(yr, mo - 1, da);
+    return null;
+  };
+  const last = get('DCS'), first = get('DAC') || get('DCT');
+  return { first, last, name: (first + ' ' + last).trim(),
+    dob: parseDate(get('DBB')), expiry: parseDate(get('DBA')), licLast4: (get('DAQ') || '').slice(-4) };
+}
+// Reduce a parsed ID to a stored-safe verification RESULT — never the raw ID.
+function verifyId(p, job) {
+  const now = new Date();
+  const age = p.dob ? Math.floor((now - p.dob) / (365.25 * 864e5)) : null;
+  const minAge = +job.minAge || 0;
+  const ageOk = minAge ? (age != null && age >= minAge) : true;
+  const notExpired = p.expiry ? p.expiry >= now : null;
+  const cust = (job.customer || '').toLowerCase();
+  const nameMatch = p.last ? cust.includes(p.last.toLowerCase()) : false;
+  const verified = ageOk && notExpired !== false && (nameMatch || !job.customer);
+  return { method: 'barcode', verified, nameMatch, age, ageOk, minAge, notExpired,
+    licLast4: p.licLast4, name: p.name, ts: new Date().toISOString() };
+}
+function renderIdResult(v, job) {
+  const chip = (ok, txt) => `<span class="badge ${ok === true ? 'ontime' : ok === false ? 'late' : ''}" style="margin:2px 4px 0 0">${ok === true ? '✓' : ok === false ? '✕' : '•'} ${esc(txt)}</span>`;
+  const parts = [];
+  if (v.method === 'barcode') {
+    if (job && job.customer) parts.push(chip(v.nameMatch, v.nameMatch ? 'name match' : 'name mismatch'));
+    if (v.minAge) parts.push(chip(v.ageOk, `${v.minAge}+ ${v.age != null ? '(' + v.age + ')' : ''}`));
+    else if (v.age != null) parts.push(chip(true, 'age ' + v.age));
+    if (v.notExpired != null) parts.push(chip(v.notExpired, v.notExpired ? 'ID valid' : 'ID expired'));
+  } else {
+    parts.push(chip(true, 'confirmed by courier'));
+  }
+  $('idResult').innerHTML = `<div class="pod-block" style="margin-top:8px;border:1px solid ${v.verified ? '#2ee6a4' : '#f87171'};border-radius:10px;padding:10px">
+    <div class="pod-label" style="color:${v.verified ? '#2ee6a4' : '#f87171'}">${v.verified ? '✓ Identity verified' : '⚠ Verify manually before completing'}</div>
+    <div style="margin-top:4px">${parts.join('')}</div></div>`;
+  $('idScanStatus').textContent = '';
+}
+async function startIdScan() {
+  const job = S.jobs.find(x => x.id === S.podJobId); if (!job) return;
+  if (!('BarcodeDetector' in window)) { $('idScanStatus').textContent = 'Barcode scan not supported here — use Photo ID.'; return; }
+  const video = $('idVideo');
+  try {
+    idStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}});
+    video.srcObject = idStream; video.hidden = false; await video.play();
+    let formats = ['pdf417'];
+    try { const supp = await BarcodeDetector.getSupportedFormats(); if (!supp.includes('pdf417')) formats = supp; } catch (e) {}
+    const detector = new BarcodeDetector({formats});
+    $('idScanStatus').textContent = 'Point at the barcode on the BACK of the ID…';
+    const tick = async () => {
+      if (!idStream) return;
+      try {
+        const codes = await detector.detect(video);
+        if (codes.length) { idv = verifyId(parseAAMVA(codes[0].rawValue), job); renderIdResult(idv, job); stopIdScan(); return; }
+      } catch (e) { /* keep trying */ }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  } catch (e) { $('idScanStatus').textContent = 'Camera unavailable — use Photo ID.'; }
+}
+function stopIdScan() {
+  if (idStream) { idStream.getTracks().forEach(t => t.stop()); idStream = null; }
+  const v = $('idVideo'); if (v) v.hidden = true;
+}
+// iOS / no-BarcodeDetector fallback: courier eyeballs the ID and confirms.
+// Privacy: the ID photo is shown transiently and NEVER stored.
+function idPhotoFallback(file) {
+  const job = S.jobs.find(x => x.id === S.podJobId);
+  const url = URL.createObjectURL(file);
+  $('idResult').innerHTML = `<div class="pod-block" style="margin-top:8px;border:1px solid var(--b2);border-radius:10px;padding:10px">
+    <img src="${url}" alt="ID" style="max-width:100%;max-height:170px;border-radius:8px;display:block">
+    <div class="hint" style="margin:6px 0">Check the ID matches the recipient${job && job.minAge ? ` and they are ${job.minAge}+` : ''}. This photo is not saved.</div>
+    <button class="btn success grow" id="idPhotoConfirm"><i class="ti ti-check"></i> Identity confirmed</button></div>`;
+  $('idPhotoConfirm').onclick = () => {
+    URL.revokeObjectURL(url);
+    idv = {method: 'photo', verified: true, manual: true, nameMatch: null, age: null, ts: new Date().toISOString()};
+    renderIdResult(idv, job);
+  };
+}
+
+/* ---------------- receipt: confirmation #, PDF, email + SMS ---------------- */
+function confirmationNumber() {
+  const co = ((S.settings.company || 'FOS').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase()) || 'FO';
+  const d = new Date(), ymd = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+  return `${co}-${ymd}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+}
+function buildReceiptPdf(job) {
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({unit: 'pt', format: 'a4'});
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 40;
+  const r = job.pod && job.pod.receipt || {};
+  let y = 54;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(20);
+  doc.text(S.settings.company || 'Futuro OS', M, y);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.setTextColor(90);
+  doc.text('Delivery Receipt', M, y + 18); doc.setTextColor(20); y += 48;
+  doc.setDrawColor(200); doc.roundedRect(M, y, W - 2 * M, 44, 6, 6);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(120);
+  doc.text('CONFIRMATION NUMBER', M + 12, y + 17);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(20);
+  doc.text(r.conf || '—', M + 12, y + 34); y += 66;
+  const row = (k, v) => { if (!v) return; doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(120); doc.text(k, M, y); doc.setTextColor(20); doc.text(String(v), M + 120, y, {maxWidth: W - 2 * M - 120}); y += 20; };
+  row('Recipient', job.customer || '—');
+  row('Address', job.address || '—');
+  row('Type', job.type || 'delivery');
+  row('Completed', job.pod && job.pod.t ? new Date(job.pod.t).toLocaleString() : '');
+  if (job.pod && job.pod.barcodes && job.pod.barcodes.length) row('Package(s)', job.pod.barcodes.join(', '));
+  if (job.pod && job.pod.lat) row('Geo-stamp', `${job.pod.lat.toFixed(5)}, ${job.pod.lng.toFixed(5)}`);
+  const v = job.pod && job.pod.idVerify;
+  if (v) {
+    y += 6; doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(20); doc.text('Identity verification', M, y); y += 15;
+    const parts = [v.verified ? 'Verified' : 'Not fully verified', v.method === 'barcode' ? 'ID barcode' : 'photo ID'];
+    if (v.nameMatch != null) parts.push(v.nameMatch ? 'name match' : 'name mismatch');
+    if (v.age != null) parts.push('age ' + v.age);
+    if (v.notExpired != null) parts.push(v.notExpired ? 'ID valid' : 'ID expired');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90); doc.text(parts.join(' · '), M, y); y += 18;
+  }
+  if (job.pod && job.pod.note) row('Note', job.pod.note);
+  if (job.pod && job.pod.signature) {
+    y += 6; doc.setFontSize(9); doc.setTextColor(120); doc.text('Signature', M, y); y += 6;
+    try { doc.addImage(job.pod.signature, 'JPEG', M, y, 180, 60); } catch (e) {} y += 72;
+  }
+  const photos = (job.pod && job.pod.photos) || [];
+  photos.slice(0, 3).forEach((p, i) => { try { doc.addImage(p, 'JPEG', M + i * 120, y, 110, 82); } catch (e) {} });
+  doc.setFontSize(8); doc.setTextColor(150);
+  doc.text(`Thank you for choosing ${S.settings.company || 'Futuro OS'}.`, M, H - 30);
+  return doc.output('blob');
+}
+async function issueReceipt(job) {
+  job.pod = job.pod || {};
+  job.pod.receipt = job.pod.receipt || {};
+  if (!job.pod.receipt.conf) job.pod.receipt.conf = confirmationNumber();
+  saveJobs();
+  let blob;
+  try { blob = buildReceiptPdf(job); } catch (e) { toast('Receipt PDF failed'); return; }
+  if (!(supa && cloudUser)) { job.pod.receipt.pending = true; saveJobs(); toast('Receipt saved on phone (sign in to email/text it)'); return; }
+  try {
+    const path = (crypto.randomUUID ? crypto.randomUUID() : 'r' + Date.now() + Math.random().toString(36).slice(2)) + '.pdf';
+    const up = await supa.storage.from('receipts').upload(path, blob, {contentType: 'application/pdf', upsert: false});
+    if (up.error) throw up.error;
+    const pub = supa.storage.from('receipts').getPublicUrl(path);
+    job.pod.receipt.pdfUrl = pub.data.publicUrl; job.pod.receipt.path = path; job.pod.receipt.pending = false;
+    const {data: res, error} = await supa.functions.invoke('send-receipt', {body: {
+      customerEmail: job.email || '', customerPhone: job.phone || '', customerName: job.customer || '',
+      confirmation: job.pod.receipt.conf, pdfUrl: pub.data.publicUrl, company: S.settings.company || 'Futuro OS',
+      address: job.address || '', when: job.pod.t ? new Date(job.pod.t).toLocaleString() : ''
+    }});
+    if (error) throw error;
+    job.pod.receipt.email = res && res.email; job.pod.receipt.sms = res && res.sms;
+    job.pod.receipt.configured = res && res.configured; job.pod.receipt.sentAt = Date.now();
+    saveJobs();
+    const bits = []; if (res && res.email === 'sent') bits.push('emailed'); if (res && res.sms === 'sent') bits.push('texted');
+    if (bits.length) toast('Receipt ' + bits.join(' + '));
+    else if (res && (res.email === 'not_configured' || res.sms === 'not_configured')) toast('Receipt saved · add Resend/Twilio keys to auto-send');
+    else toast('Receipt saved');
+  } catch (e) {
+    job.pod.receipt.pending = true; saveJobs(); toast('Receipt saved · will send when online');
+  }
+}
+function downloadReceipt(id) {
+  const j = S.jobs.find(x => x.id === id); if (!j || !j.pod) return;
+  if (!j.pod.receipt) { j.pod.receipt = {conf: confirmationNumber()}; saveJobs(); }
+  try { const blob = buildReceiptPdf(j); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `receipt-${j.pod.receipt.conf}.pdf`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
+  catch (e) { toast('PDF failed'); }
+}
+async function resendReceipt(id) {
+  const j = S.jobs.find(x => x.id === id); if (!j) return;
+  toast('Sending receipt…'); await issueReceipt(j); if (S.view) openDetail(id);
 }
 
 /* ---------------- STATS (analytics) ---------------- */
@@ -1172,7 +1384,7 @@ function wire() {
   document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => show(t.dataset.view)));
   document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => {
     $(b.dataset.close).hidden = true;
-    if (b.dataset.close === 'podSheet') stopScan();
+    if (b.dataset.close === 'podSheet') { stopScan(); stopIdScan(); }
   }));
   // Today
   $('dayPick').addEventListener('change', e => { S.date = e.target.value; render(); });
@@ -1199,6 +1411,10 @@ function wire() {
   $('sigClear').addEventListener('click', () => { pod.drawn = false; $('sigStatus').textContent = ''; initSigPad(); });
   $('btnScan').addEventListener('click', startScan);
   $('podBarcodeIn').addEventListener('keydown', e => { if (e.key === 'Enter') registerBarcode(e.target.value.trim()); });
+  // Secured-delivery ID verification
+  $('jSecured').addEventListener('change', e => { $('jMinAgeWrap').hidden = !e.target.checked; });
+  $('btnIdScan').addEventListener('click', startIdScan);
+  $('idPhoto').addEventListener('change', e => { if (e.target.files[0]) idPhotoFallback(e.target.files[0]); e.target.value = ''; });
   $('btnPodComplete').addEventListener('click', () => finishPod(false));
   $('btnPodFail').addEventListener('click', () => finishPod(true));
   // Stats
@@ -1258,3 +1474,5 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 // expose a couple of handlers used from generated HTML
 window.show = show;
 window.openJobSheet = openJobSheet;
+window.downloadReceipt = downloadReceipt;
+window.resendReceipt = resendReceipt;

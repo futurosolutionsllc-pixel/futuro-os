@@ -1,5 +1,5 @@
 /* FuturoOS service worker — offline app shell */
-const CACHE = 'fos-v4';
+const CACHE = 'fos-v5';
 const SHELL = [
   './',
   './index.html',
@@ -12,6 +12,7 @@ const SHELL = [
   './icons/icon-512.png',
   './vendor/leaflet/leaflet.css',
   './vendor/leaflet/leaflet.js',
+  './vendor/jspdf.umd.min.js',
   './vendor/leaflet/images/marker-icon.png',
   './vendor/leaflet/images/marker-icon-2x.png',
   './vendor/leaflet/images/marker-shadow.png',

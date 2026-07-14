@@ -163,6 +163,7 @@
     </label>
     <label>Customer name <input id="jName" class="input" placeholder="Jane Smith"></label>
     <label>Phone <input id="jPhone" class="input" inputmode="tel" placeholder="+1 555 0100"></label>
+    <label>Customer email <input id="jEmail" class="input" type="email" inputmode="email" placeholder="jane@example.com — for receipt"></label>
     <label>Address
       <div class="row gap8">
         <input id="jAddress" class="input grow" placeholder="Street, City, ST — or lat,lng">
@@ -180,6 +181,15 @@
       <label class="grow">Required barcode <input id="jBarcode" class="input" placeholder="optional"></label>
     </div>
     <label>Notes <textarea id="jNotes" class="input" rows="2"></textarea></label>
+    <div class="pod-block" style="margin:2px 0 6px">
+      <label class="row gap8" style="align-items:center;cursor:pointer;margin:0">
+        <input type="checkbox" id="jSecured" style="width:20px;height:20px;flex:none">
+        <span><i class="ti ti-shield-lock"></i> Secured delivery — verify recipient ID</span>
+      </label>
+      <label id="jMinAgeWrap" hidden style="margin-top:8px">Minimum age (optional, for age-restricted)
+        <input id="jMinAge" type="number" class="input" placeholder="e.g. 21" inputmode="numeric">
+      </label>
+    </div>
     <div class="row gap8">
       <button class="btn danger" id="btnDeleteJob" hidden>Delete</button>
       <button class="btn primary grow" id="btnSaveJob">Save job</button>
@@ -224,6 +234,19 @@
       <video id="scanVideo" hidden playsinline></video>
       <div class="hint" id="scanStatus"></div>
       <div id="podBarcodes" class="hint"></div>
+    </div>
+
+    <div class="pod-block" id="podIdBlock" hidden>
+      <div class="pod-label"><i class="ti ti-id-badge-2"></i> Recipient ID verification <span class="hint" id="podIdReq"></span></div>
+      <div class="row gap8">
+        <button class="btn grow" id="btnIdScan"><i class="ti ti-scan"></i> Scan ID barcode</button>
+        <label class="btn file-btn" id="btnIdPhotoWrap"><i class="ti ti-camera"></i>&nbsp;Photo ID
+          <input type="file" id="idPhoto" accept="image/*" capture="environment" hidden>
+        </label>
+      </div>
+      <video id="idVideo" hidden playsinline></video>
+      <div class="hint" id="idScanStatus"></div>
+      <div id="idResult"></div>
     </div>
 
     <label>Note <input id="podNote" class="input" placeholder="Left at front desk…"></label>
@@ -323,6 +346,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
