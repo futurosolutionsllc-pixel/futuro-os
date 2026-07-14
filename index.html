@@ -2,220 +2,278 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f1a">
 <title>FuturoOS</title>
-
-<style>
-body{margin:0;font-family:system-ui;background:#0b0f1a;color:#e5e7eb}
-.topbar{display:flex;gap:10px;padding:12px;background:#020617}
-button{background:#1e293b;color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer}
-button:hover{background:#334155}
-.panel{display:none;padding:20px}
-.panel.active{display:block}
-.card{background:#111827;padding:14px;margin-bottom:10px;border-radius:10px}
-input{padding:8px;width:60%;margin:5px 0;background:#020617;color:white;border:1px solid #1f2937}
-.badge{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:6px}
-.freight{background:#2563eb}
-.govcon{background:#16a34a}
-.pipeline{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.col{background:#020617;padding:10px;border-radius:8px}
-.status{font-size:12px;color:#9ca3af;margin-top:5px}
-</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="styles.css">
 </head>
-
 <body>
 
-<div class="topbar">
-  <button onclick="show('dashboard')">Dashboard</button>
-  <button onclick="show('freight')">Freight</button>
-  <button onclick="show('govcon')">GovCon</button>
-  <button onclick="show('pipeline')">Pipeline</button>
-</div>
-
-<div id="dashboard" class="panel active">
-  <div class="card">
-    <h2>Command Center</h2>
-    <button onclick="loadAll()">Auto Source (Real + Simulated)</button>
-    <div id="status"></div>
+<header class="appbar">
+  <div class="brand">
+    <span class="brand-mark">F</span>
+    <div>
+      <div class="brand-name" id="brandName">FuturoOS</div>
+      <div class="brand-sub" id="brandSub">Operator</div>
+    </div>
   </div>
-</div>
-
-<div id="freight" class="panel">
-  <div class="card">
-    <h2>Freight</h2>
-    <button onclick="loadFreight()">Load Freight Deals</button>
+  <div class="appbar-actions">
+    <span id="gpsDot" class="gps-dot off" title="GPS status"></span>
+    <button class="icon-btn" id="btnSettings" aria-label="Settings">⚙</button>
   </div>
-  <div id="freightList"></div>
-</div>
+</header>
 
-<div id="govcon" class="panel">
-  <div class="card">
-    <h2>GovCon (Live SAM.gov)</h2>
-    <input id="apiKey" placeholder="Paste SAM.gov API Key">
-    <button onclick="loadGov()">Fetch Contracts</button>
-  </div>
-  <div id="govList"></div>
-</div>
+<main id="main">
 
-<div id="pipeline" class="panel">
-  <h2>Pipeline</h2>
-  <div class="pipeline">
-    <div class="col"><h3>Lead</h3><div id="lead"></div></div>
-    <div class="col"><h3>Active</h3><div id="active"></div></div>
-    <div class="col"><h3>Closed</h3><div id="closed"></div></div>
-  </div>
-</div>
-
-<script>
-function show(id){
-  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-}
-
-// STORAGE
-let deals = JSON.parse(localStorage.getItem('deals')) || [];
-
-function save(){
-  localStorage.setItem('deals', JSON.stringify(deals));
-}
-
-// =======================
-// 🚚 FREIGHT (SIMULATED BUT STRUCTURED)
-// =======================
-function loadFreight(){
-  updateStatus("Loading freight...");
-
-  try{
-    const freight = [
-      {title:"Amazon Load VA→TX", value:5200},
-      {title:"Walmart DC→FL", value:4100},
-      {title:"Target MD→GA", value:3900}
-    ];
-
-    freight.forEach(d=>{
-      deals.push({
-        id:Date.now()+Math.random(),
-        type:'freight',
-        title:d.title,
-        value:d.value,
-        stage:'lead'
-      });
-    });
-
-    save();
-    renderAll();
-    updateStatus("Freight loaded successfully");
-
-  }catch(e){
-    updateStatus("Freight error");
-  }
-}
-
-// =======================
-// 🏛 GOVCON (REAL API)
-// =======================
-async function loadGov(){
-  const key = apiKey.value;
-  if(!key){
-    updateStatus("Missing API key");
-    return;
-  }
-
-  updateStatus("Fetching SAM.gov...");
-
-  try{
-    const res = await fetch(`https://api.sam.gov/opportunities/v2/search?api_key=${key}&limit=5`);
-    const data = await res.json();
-
-    if(!data.opportunitiesData){
-      updateStatus("No data returned");
-      return;
-    }
-
-    data.opportunitiesData.forEach(op=>{
-      deals.push({
-        id:Date.now()+Math.random(),
-        type:'govcon',
-        title: op.title || "Untitled",
-        value: op.award?.amount || 0,
-        stage:'lead'
-      });
-    });
-
-    save();
-    renderAll();
-    updateStatus("GovCon loaded successfully");
-
-  }catch(e){
-    updateStatus("API error (check key)");
-  }
-}
-
-// =======================
-// LOAD ALL
-// =======================
-function loadAll(){
-  loadFreight();
-}
-
-// =======================
-// RENDER
-// =======================
-function renderAll(){
-  freightList.innerHTML='';
-  govList.innerHTML='';
-  lead.innerHTML='';
-  active.innerHTML='';
-  closed.innerHTML='';
-
-  deals.forEach(d=>{
-    const card = `
-      <div class="card">
-        ${d.title}
-        <br>$${d.value}
-        <span class="badge ${d.type}">${d.type}</span>
-        <br>
-        <button onclick="move(${d.id})">Next</button>
-        <button onclick="del(${d.id})">Delete</button>
+  <!-- ============ TODAY (dispatch board) ============ -->
+  <section id="view-today" class="view active">
+    <div class="row day-row">
+      <button class="icon-btn" id="dayPrev" aria-label="Previous day">‹</button>
+      <input type="date" id="dayPick" class="day-pick">
+      <button class="icon-btn" id="dayNext" aria-label="Next day">›</button>
+    </div>
+    <div class="card summary-card">
+      <div class="summary-grid" id="todaySummary"></div>
+      <div class="row gap8">
+        <button class="btn primary grow" id="btnOptimize">⚡ Optimize route</button>
+        <button class="btn grow" id="btnStartDay">▶ Drive</button>
       </div>
-    `;
+      <div class="hint" id="optimizeStatus"></div>
+    </div>
+    <div id="todayList" class="stop-list"></div>
+    <div class="empty" id="todayEmpty" hidden>
+      <p>No stops for this day.</p>
+      <button class="btn primary" id="btnAddFirst">+ Add a job</button>
+    </div>
+  </section>
 
-    if(d.type==='freight') freightList.innerHTML+=card;
-    if(d.type==='govcon') govList.innerHTML+=card;
+  <!-- ============ DRIVE (focus mode) ============ -->
+  <section id="view-drive" class="view">
+    <div id="driveSafety" class="safety-note">
+      🛑 Interact only while stopped. Use voice navigation while moving.
+      <button class="btn small" id="safetyOk">Got it</button>
+    </div>
+    <div id="driveContent"></div>
+  </section>
 
-    document.getElementById(d.stage).innerHTML+=card;
-  });
-}
+  <!-- ============ MAP ============ -->
+  <section id="view-map" class="view">
+    <div id="map"></div>
+    <div class="map-legend card" id="mapLegend"></div>
+  </section>
 
-// =======================
-// PIPELINE CONTROL
-// =======================
-function move(id){
-  const d = deals.find(x=>x.id===id);
-  if(d.stage==='lead') d.stage='active';
-  else if(d.stage==='active') d.stage='closed';
-  save();
-  renderAll();
-}
+  <!-- ============ JOBS ============ -->
+  <section id="view-jobs" class="view">
+    <div class="row gap8">
+      <button class="btn primary grow" id="btnNewJob">+ New job</button>
+      <select id="jobsFilter" class="input grow">
+        <option value="all">All jobs</option>
+        <option value="open">Open</option>
+        <option value="done">Completed</option>
+        <option value="failed">Failed</option>
+      </select>
+    </div>
+    <div id="jobsList" class="stop-list"></div>
+  </section>
 
-function del(id){
-  deals = deals.filter(d=>d.id!==id);
-  save();
-  renderAll();
-}
+  <!-- ============ STATS (analytics) ============ -->
+  <section id="view-stats" class="view">
+    <div class="row gap8 range-row" id="statsRange">
+      <button class="chip active" data-days="7">7 days</button>
+      <button class="chip" data-days="30">30 days</button>
+      <button class="chip" data-days="90">90 days</button>
+    </div>
+    <div id="statsContent"></div>
+  </section>
 
-// =======================
-// STATUS + TESTING
-// =======================
-function updateStatus(msg){
-  document.getElementById("status").innerText = msg;
-  console.log("[STATUS]", msg);
-}
+  <!-- ============ BIZ (pipeline + govcon) ============ -->
+  <section id="view-biz" class="view">
+    <div class="card">
+      <h2>GovCon (live SAM.gov)</h2>
+      <div class="row gap8">
+        <input id="apiKey" class="input grow" placeholder="SAM.gov API key">
+        <button class="btn" id="btnGov">Fetch</button>
+      </div>
+      <div class="hint" id="bizStatus"></div>
+    </div>
+    <div class="card">
+      <h2>Pipeline</h2>
+      <div class="row gap8">
+        <input id="dealTitle" class="input grow" placeholder="New deal / customer">
+        <input id="dealValue" class="input" type="number" placeholder="$" style="max-width:90px">
+        <button class="btn" id="btnAddDeal">Add</button>
+      </div>
+    </div>
+    <div class="pipeline">
+      <div class="col"><h3>Lead</h3><div id="lead"></div></div>
+      <div class="col"><h3>Active</h3><div id="active"></div></div>
+      <div class="col"><h3>Closed</h3><div id="closed"></div></div>
+    </div>
+  </section>
 
-// INIT
-renderAll();
-updateStatus("System ready");
-</script>
+</main>
 
+<!-- ============ BOTTOM NAV ============ -->
+<nav class="tabbar">
+  <button class="tab active" data-view="today"><span class="tab-ico">📋</span>Today</button>
+  <button class="tab" data-view="drive"><span class="tab-ico">🚚</span>Drive</button>
+  <button class="tab" data-view="map"><span class="tab-ico">🗺</span>Map</button>
+  <button class="tab" data-view="jobs"><span class="tab-ico">📦</span>Jobs</button>
+  <button class="tab" data-view="stats"><span class="tab-ico">📈</span>Stats</button>
+  <button class="tab" data-view="biz"><span class="tab-ico">💼</span>Biz</button>
+</nav>
+
+<!-- ============ JOB EDITOR SHEET ============ -->
+<div class="sheet" id="jobSheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="jobSheetTitle">New job</h2>
+      <button class="icon-btn" data-close="jobSheet">✕</button>
+    </div>
+    <label>Type
+      <select id="jType" class="input">
+        <option value="delivery">Delivery</option>
+        <option value="pickup">Pickup</option>
+      </select>
+    </label>
+    <label>Customer name <input id="jName" class="input" placeholder="Jane Smith"></label>
+    <label>Phone <input id="jPhone" class="input" inputmode="tel" placeholder="+1 555 0100"></label>
+    <label>Address
+      <div class="row gap8">
+        <input id="jAddress" class="input grow" placeholder="Street, City, ST — or lat,lng">
+        <button class="btn" id="btnGeocode">📍</button>
+      </div>
+      <div class="hint" id="geoStatus"></div>
+    </label>
+    <div class="row gap8">
+      <label class="grow">Date <input id="jDate" type="date" class="input"></label>
+      <label>Window from <input id="jWinS" type="time" class="input"></label>
+      <label>to <input id="jWinE" type="time" class="input"></label>
+    </div>
+    <div class="row gap8">
+      <label class="grow">Rate ($) <input id="jRate" type="number" class="input" placeholder="0"></label>
+      <label class="grow">Required barcode <input id="jBarcode" class="input" placeholder="optional"></label>
+    </div>
+    <label>Notes <textarea id="jNotes" class="input" rows="2"></textarea></label>
+    <div class="row gap8">
+      <button class="btn danger" id="btnDeleteJob" hidden>Delete</button>
+      <button class="btn primary grow" id="btnSaveJob">Save job</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ POD SHEET ============ -->
+<div class="sheet" id="podSheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2>Proof of delivery</h2>
+      <button class="icon-btn" data-close="podSheet">✕</button>
+    </div>
+    <div id="podJobLine" class="hint"></div>
+
+    <div class="pod-block">
+      <div class="pod-label">📷 Photos <span class="hint" id="podPhotoCount"></span></div>
+      <div class="row gap8">
+        <label class="btn grow file-btn">Take photo
+          <input type="file" id="podPhoto" accept="image/*" capture="environment" hidden>
+        </label>
+      </div>
+      <div class="pod-photos" id="podPhotos"></div>
+    </div>
+
+    <div class="pod-block">
+      <div class="pod-label">✍ Signature</div>
+      <canvas id="sigPad" width="600" height="200"></canvas>
+      <div class="row gap8">
+        <button class="btn small" id="sigClear">Clear</button>
+        <span class="hint" id="sigStatus"></span>
+      </div>
+    </div>
+
+    <div class="pod-block">
+      <div class="pod-label">▮▯ Barcode <span class="hint" id="podBarcodeReq"></span></div>
+      <div class="row gap8">
+        <input id="podBarcodeIn" class="input grow" placeholder="Scan or type code">
+        <button class="btn" id="btnScan">Scan</button>
+      </div>
+      <video id="scanVideo" hidden playsinline></video>
+      <div class="hint" id="scanStatus"></div>
+      <div id="podBarcodes" class="hint"></div>
+    </div>
+
+    <label>Note <input id="podNote" class="input" placeholder="Left at front desk…"></label>
+
+    <div class="row gap8">
+      <button class="btn danger grow" id="btnPodFail">✕ Failed</button>
+      <button class="btn success grow" id="btnPodComplete">✓ Complete</button>
+    </div>
+    <div class="hint" id="podStatus"></div>
+  </div>
+</div>
+
+<!-- ============ JOB DETAIL SHEET ============ -->
+<div class="sheet" id="detailSheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2>Job detail</h2>
+      <button class="icon-btn" data-close="detailSheet">✕</button>
+    </div>
+    <div id="detailContent"></div>
+  </div>
+</div>
+
+<!-- ============ SETTINGS SHEET ============ -->
+<div class="sheet" id="settingsSheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2>Settings</h2>
+      <button class="icon-btn" data-close="settingsSheet">✕</button>
+    </div>
+    <label>Company name <input id="sCompany" class="input"></label>
+    <label>Your phone <input id="sPhone" class="input" inputmode="tel"></label>
+    <label>Home base address
+      <div class="row gap8">
+        <input id="sHome" class="input grow" placeholder="Depot / home — or lat,lng">
+        <button class="btn" id="btnGeoHome">📍</button>
+      </div>
+      <div class="hint" id="homeGeoStatus"></div>
+    </label>
+    <div class="row gap8">
+      <label class="grow">Avg speed (mph) <input id="sSpeed" type="number" class="input"></label>
+      <label class="grow">Service min/stop <input id="sService" type="number" class="input"></label>
+    </div>
+    <label>Navigation app
+      <select id="sNav" class="input">
+        <option value="google">Google Maps</option>
+        <option value="waze">Waze</option>
+        <option value="apple">Apple Maps</option>
+      </select>
+    </label>
+    <label>SMS — on my way <textarea id="sTmplWay" class="input" rows="2"></textarea></label>
+    <label>SMS — arrived <textarea id="sTmplArr" class="input" rows="2"></textarea></label>
+    <label>SMS — completed <textarea id="sTmplDone" class="input" rows="2"></textarea></label>
+    <div class="hint">Placeholders: {name} {company} {eta} {address}</div>
+    <label>Webhook URL (POST on job completion) <input id="sWebhook" class="input" placeholder="https://…"></label>
+    <label>SAM.gov API key <input id="sSamKey" class="input"></label>
+    <div class="row gap8">
+      <button class="btn grow" id="btnExport">⬇ Backup JSON</button>
+      <label class="btn grow file-btn">⬆ Restore
+        <input type="file" id="importFile" accept=".json" hidden>
+      </label>
+      <button class="btn grow" id="btnCsv">⬇ Jobs CSV</button>
+    </div>
+    <button class="btn primary" id="btnSaveSettings">Save settings</button>
+    <div class="hint" id="settingsStatus"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
