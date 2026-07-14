@@ -52,7 +52,7 @@ const S = {
   view: 'today'
 };
 
-const saveJobs = () => { localStorage.setItem('fos.jobs', JSON.stringify(S.jobs)); queueCloudSave(); };
+const saveJobs = () => { localStorage.setItem('fos.jobs', JSON.stringify(S.jobs)); queueJobSync(); };
 const saveDeals = () => { localStorage.setItem('deals', JSON.stringify(S.deals)); queueCloudSave(); };
 const saveSettings = () => { localStorage.setItem('fos.settings', JSON.stringify(S.settings)); queueCloudSave(); };
 
@@ -1252,17 +1252,29 @@ let supa = null, cloudUser = null, _cloudTimer = null, _cloudApplying = false;
 function initCloud() {
   if (!window.supabase) { updateCloudUi(); return; } // CDN unreachable → local-only mode
   supa = window.supabase.createClient(FF_SUPABASE_URL, FF_SUPABASE_KEY);
-  supa.auth.getSession().then(({data}) => {
-    if (data && data.session) { cloudUser = data.session.user; updateCloudUi(); pullCloud(); fetchInbox(); }
-    else updateCloudUi();
+  supa.auth.getSession().then(async ({data}) => {
+    if (data && data.session) {
+      cloudUser = data.session.user; updateCloudUi();
+      await pullCloud();     // deals/settings (+ one-time carry-over of old inline jobs)
+      await pullJobs();      // authoritative jobs from the shared table
+      subscribeJobs();       // live updates from the desktop Deliveries page
+      fetchInbox();
+    } else updateCloudUi();
   }).catch(() => updateCloudUi());
 }
-const cloudState = () => ({schema: 1, jobs: S.jobs, deals: S.deals, settings: S.settings, savedAt: Date.now()});
+// mobile_snapshot now carries only deals + settings; JOBS live in the shared
+// `jobs` table (see below) so the desktop Deliveries surface and the phone
+// read/write one list.
+const cloudState = () => ({schema: 2, deals: S.deals, settings: S.settings, savedAt: Date.now()});
 function applyCloudState(d) {
-  if (!d || !Array.isArray(d.jobs)) return false;
+  if (!d) return false;
   _cloudApplying = true;
   try {
-    S.jobs = d.jobs; saveJobs();
+    // one-time migration: old snapshots stored jobs inline — carry them over
+    // once so they can be pushed into the shared jobs table by pullJobs().
+    if (Array.isArray(d.jobs) && d.jobs.length && !S.jobs.length) {
+      S.jobs = d.jobs; localStorage.setItem('fos.jobs', JSON.stringify(S.jobs));
+    }
     if (Array.isArray(d.deals)) { S.deals = d.deals; saveDeals(); }
     if (d.settings) { S.settings = Object.assign({}, DEFAULT_SETTINGS, d.settings); saveSettings(); }
     if (d.savedAt) localStorage.setItem('fos.savedAt', String(d.savedAt));
@@ -1278,8 +1290,7 @@ async function pullCloud() {
     const localAt = +(localStorage.getItem('fos.savedAt') || 0);
     if (row && row.data && (row.data.savedAt || 0) > localAt) {
       applyCloudState(row.data);
-      render(); loadSettingsForm();
-      toast('Cloud data loaded');
+      loadSettingsForm();
       updateCloudUi();
     } else {
       pushCloud(); // no cloud row yet, or this phone is newer
@@ -1303,6 +1314,81 @@ function queueCloudSave() {
   clearTimeout(_cloudTimer);
   _cloudTimer = setTimeout(pushCloud, 800);
 }
+
+/* ------- shared jobs table (two-way sync with the desktop Deliveries page) ------- */
+let _jobTimer = null, _jobsChannel = null, _rtTimer = null;
+function jobToRow(j) {
+  return {
+    id: j.id, owner: cloudUser.id, type: j.type || 'delivery', customer: j.customer || null,
+    phone: j.phone || null, email: j.email || null, address: j.address || null,
+    lat: j.lat ?? null, lng: j.lng ?? null, job_date: j.date || null,
+    win_s: j.winS || null, win_e: j.winE || null, rate: j.rate ?? null,
+    status: j.status || 'pending', notes: j.notes || null, barcode_required: j.barcodeRequired || null,
+    secured: !!j.secured, min_age: j.minAge || null, seq: j.seq ?? null,
+    events: j.events || [], pod: j.pod || null, source: j.source || 'mobile',
+    updated_at: new Date().toISOString()
+  };
+}
+function rowToJob(r) {
+  return {
+    id: r.id, type: r.type || 'delivery', customer: r.customer || '', phone: r.phone || '',
+    email: r.email || '', address: r.address || '', lat: r.lat, lng: r.lng, date: r.job_date || '',
+    winS: r.win_s || '', winE: r.win_e || '', rate: +r.rate || 0, status: r.status || 'pending',
+    notes: r.notes || '', barcodeRequired: r.barcode_required || '', secured: !!r.secured,
+    minAge: r.min_age || 0, seq: r.seq ?? 0, events: r.events || [], pod: r.pod || null,
+    source: r.source || 'desktop', _u: r.updated_at
+  };
+}
+async function pullJobs() {
+  if (!supa || !cloudUser) return;
+  try {
+    const {data, error} = await supa.from('jobs').select('*').eq('owner', cloudUser.id);
+    if (error) { console.warn('pullJobs:', error.message); return; }
+    const rows = data || [];
+    if (!rows.length) { if (S.jobs.length) pushAllJobs(); return; } // seed cloud from this phone
+    // server rows are authoritative for their id; keep local-only (offline) jobs.
+    const seen = new Set();
+    const merged = rows.map(r => { seen.add(r.id); return rowToJob(r); });
+    const localOnly = S.jobs.filter(j => !seen.has(j.id));
+    localOnly.forEach(j => merged.push(j));
+    _cloudApplying = true;
+    try { S.jobs = merged; localStorage.setItem('fos.jobs', JSON.stringify(S.jobs)); }
+    finally { _cloudApplying = false; }
+    if (localOnly.length) localOnly.forEach(pushJob); // push offline-created jobs up
+    render();
+  } catch (e) { /* offline — keep local */ }
+}
+async function pushAllJobs() {
+  if (!supa || !cloudUser || !S.jobs.length) return;
+  try { await supa.from('jobs').upsert(S.jobs.map(jobToRow), {onConflict: 'id'}); }
+  catch (e) { /* offline — retry on next save */ }
+}
+async function pushJob(job) {
+  if (!supa || !cloudUser) return;
+  try { await supa.from('jobs').upsert([jobToRow(job)], {onConflict: 'id'}); } catch (e) {}
+}
+async function deleteJobRow(id) {
+  if (!supa || !cloudUser) return;
+  try { await supa.from('jobs').delete().eq('id', id).eq('owner', cloudUser.id); } catch (e) {}
+}
+function queueJobSync() {
+  if (_cloudApplying) return;
+  if (!supa || !cloudUser) return;
+  clearTimeout(_jobTimer);
+  _jobTimer = setTimeout(pushAllJobs, 800);
+}
+function subscribeJobs() {
+  if (!supa || !cloudUser || _jobsChannel) return;
+  try {
+    _jobsChannel = supa.channel('jobs-' + cloudUser.id)
+      .on('postgres_changes', {event: '*', schema: 'public', table: 'jobs', filter: 'owner=eq.' + cloudUser.id},
+        () => { clearTimeout(_rtTimer); _rtTimer = setTimeout(pullJobs, 400); })
+      .subscribe();
+  } catch (e) {}
+}
+function unsubscribeJobs() {
+  if (_jobsChannel) { try { supa.removeChannel(_jobsChannel); } catch (e) {} _jobsChannel = null; }
+}
 function updateCloudUi(err) {
   const dot = $('cloudDot'), st = $('cloudStatus'), auth = $('btnCloudAuth'), push = $('btnCloudPush');
   const on = !!(supa && cloudUser);
@@ -1320,6 +1406,7 @@ function updateCloudUi(err) {
 async function cloudAuthClick() {
   if (!window.supabase) { toast('Cloud unavailable — check connection'); return; }
   if (cloudUser) {
+    unsubscribeJobs();
     await supa.auth.signOut().catch(() => {});
     cloudUser = null;
     updateCloudUi();
@@ -1343,7 +1430,9 @@ async function doAuth(signup) {
       cloudUser = (data.session && data.session.user) || data.user;
       $('authSheet').hidden = true;
       updateCloudUi();
-      pullCloud();
+      await pullCloud();
+      await pullJobs();
+      subscribeJobs();
       fetchInbox();
       toast('Signed in — cloud sync on');
     } else {
@@ -1403,8 +1492,9 @@ function wire() {
   $('btnSaveJob').addEventListener('click', () => saveJob().catch(e => toast('Save failed: ' + e.message)));
   $('btnDeleteJob').addEventListener('click', () => {
     if (!confirm('Delete this job?')) return;
-    S.jobs = S.jobs.filter(j => j.id !== S.editingId);
-    saveJobs(); $('jobSheet').hidden = true; render();
+    const delId = S.editingId;
+    S.jobs = S.jobs.filter(j => j.id !== delId);
+    saveJobs(); deleteJobRow(delId); $('jobSheet').hidden = true; render();
   });
   // POD
   $('podPhoto').addEventListener('change', e => { if (e.target.files[0]) addPodPhoto(e.target.files[0]); e.target.value = ''; });

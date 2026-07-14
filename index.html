@@ -735,6 +735,7 @@ const NAV_GROUPS=[
     {id:'postal',ic:'ti-mailbox',lb:'Postal Injection'},
   ]},
   {id:'g-dispatch',lb:'Dispatch',ic:'ti-truck-delivery',items:[
+    {id:'deliveries',ic:'ti-package',lb:'Deliveries',delivBadge:true},
     {id:'dispatch',ic:'ti-truck-delivery',lb:'Dispatch Board'},
     {id:'sortstage',ic:'ti-stack-2',lb:'Sort & Stage'},
     {id:'routes',ic:'ti-route',lb:'Route Builder'},
@@ -788,6 +789,7 @@ const PM={
   vehicles:{t:'Vehicle Planner',s:'Fleet fit, cost profile, and utilization'},
   routes:{t:'Route Builder',s:'Zones, stop order, and driver runs'},
   postal:{t:'Postal Injection',s:'USPS staging, manifests, and handoff — simulation mode'},
+  deliveries:{t:'Deliveries',s:'Shared driver job list — synced live with the mobile app'},
   dispatch:{t:'Courier Dispatch',s:'Last-mile runs by driver, zone, and SLA'},
   secure:{t:'Secure Courier',s:'Credential-gated, chain-of-custody premium lane'},
   govconops:{t:'GovCon Shipments',s:'Contract-compliant government logistics execution'},
@@ -1479,6 +1481,121 @@ async function dismissInbound(id){
 }
 
 // ============================================================
+// DELIVERIES — shared driver job list (public.jobs table).
+// Two-way synced with the mobile app: create/edit here and it
+// shows on the phone; the driver's status + POD flow back here.
+// ============================================================
+let DELIV=[], _delivLoaded=false, _delivCh=null;
+const DELIV_STATUS={pending:'Pending',enroute:'En route',arrived:'Arrived',done:'Delivered',failed:'Failed'};
+function delivOpenCount(){ return DELIV.filter(d=>d.status!=='done'&&d.status!=='failed').length; }
+async function fetchDeliveries(){
+  if(!window.ffSupa || !window.FF_USER){ _delivLoaded=false; if(page==='deliveries') rDeliveries(); return; }
+  try{
+    const {data,error}=await window.ffSupa.from('jobs').select('*').order('job_date',{ascending:true});
+    if(error){ console.warn('Deliveries fetch:',error.message); return; }
+    DELIV=data||[]; _delivLoaded=true; rNav();
+    if(page==='deliveries') rDeliveries();
+    if(!_delivCh) subscribeDeliveries();
+  }catch(e){ console.warn('Deliveries fetch failed:',e.message); }
+}
+function subscribeDeliveries(){
+  if(!window.ffSupa || !window.FF_USER || _delivCh) return;
+  try{
+    _delivCh=window.ffSupa.channel('deliv-'+window.FF_USER.id)
+      .on('postgres_changes',{event:'*',schema:'public',table:'jobs',filter:'owner=eq.'+window.FF_USER.id},()=>fetchDeliveries())
+      .subscribe();
+  }catch(e){}
+}
+function rDeliveries(){
+  const c=document.getElementById('content');
+  if(!window.FF_USER){ c.innerHTML='<div class="card" style="padding:40px;text-align:center;color:var(--t3)">Sign in (cloud) to sync deliveries with the mobile driver app.</div>'; return; }
+  if(!_delivLoaded){ c.innerHTML='<div style="padding:40px;text-align:center;color:var(--t3);font-size:13px">Loading deliveries…</div>'; fetchDeliveries(); return; }
+  const badge=s=>{const col={pending:['var(--bg4)','var(--t2)'],enroute:['var(--bblue)','var(--tblue)'],arrived:['var(--bamber)','var(--tamber)'],done:['var(--bgreen)','var(--tgreen)'],failed:['var(--bred)','var(--tred)']}[s]||['var(--bg4)','var(--t2)'];return `<span class="badge" style="background:${col[0]};color:${col[1]}">${DELIV_STATUS[s]||esc(s)}</span>`;};
+  const card=d=>{
+    const win=(d.win_s||d.win_e)?`${esc(d.win_s||'…')}–${esc(d.win_e||'…')}`:'';
+    const rc=d.pod&&d.pod.receipt;
+    return `<div class="card" style="margin-bottom:10px;padding:16px">
+      <div style="display:flex;justify-content:space-between;gap:12px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:700;color:var(--t1)">${esc(d.customer||'(no name)')} ${d.secured?'<i class="ti ti-shield-lock" title="Secured — ID verify" style="color:var(--tgreen)"></i>':''}</div>
+          <div style="font-size:12px;color:var(--t3);margin-top:2px">${esc(d.address||'No address')}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">
+            ${badge(d.status)}
+            <span class="badge" style="background:var(--bg4);color:var(--t2)">${esc(d.type||'delivery')}</span>
+            ${d.job_date?`<span style="font-size:11px;color:var(--t3)"><i class="ti ti-calendar"></i> ${esc(d.job_date)}${win?' · '+win:''}</span>`:''}
+            ${d.rate?`<span style="font-size:11px;color:var(--t2)">$${Number(d.rate).toLocaleString()}</span>`:''}
+            ${d.source?`<span style="font-size:10px;color:var(--t3)">via ${esc(d.source)}</span>`:''}
+          </div>
+          ${rc&&rc.conf?`<div style="font-size:11px;color:var(--t3);margin-top:6px">Receipt ${esc(rc.conf)}${rc.email==='sent'?' · emailed':''}${rc.sms==='sent'?' · texted':''}</div>`:''}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+          <button class="btn-ghost" style="padding:6px 12px;border-radius:8px;font-size:12px;background:transparent;border:1px solid var(--b2);color:var(--t2);cursor:pointer" onclick="deliveryForm('${esc(d.id)}')"><i class="ti ti-pencil"></i> Edit</button>
+          <button class="btn-ghost" style="padding:6px 12px;border-radius:8px;font-size:12px;background:transparent;border:1px solid var(--b2);color:var(--t3);cursor:pointer" onclick="delDelivery('${esc(d.id)}')" aria-label="Delete"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>
+    </div>`;
+  };
+  const open=DELIV.filter(d=>d.status!=='done'&&d.status!=='failed');
+  const done=DELIV.filter(d=>d.status==='done'||d.status==='failed');
+  c.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:12px;color:var(--t3)">${open.length} open · ${done.length} completed · live sync with mobile</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-ghost" style="padding:8px 13px;border-radius:8px;font-size:12px;background:transparent;border:1px solid var(--b2);color:var(--t2);cursor:pointer" onclick="fetchDeliveries()" aria-label="Refresh"><i class="ti ti-refresh"></i></button>
+        <button class="btn" style="padding:8px 16px;border-radius:8px;font-size:12px;cursor:pointer" onclick="deliveryForm()"><i class="ti ti-plus"></i> New delivery</button>
+      </div>
+    </div>
+    ${DELIV.length ? (open.map(card).join('')+(done.length?`<div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 8px">Completed</div>`+done.map(card).join(''):'')) :
+      '<div class="card" style="padding:48px 24px;text-align:center"><div style="font-size:14px;color:var(--t2);margin-bottom:6px">No deliveries yet</div><div style="font-size:12px;color:var(--t3)">Create one here or on the mobile app — they stay in sync.</div></div>'}`;
+}
+function deliveryForm(id){
+  const d=id?DELIV.find(x=>x.id===id):null;
+  const body=
+    fText('dl_cust','Customer','Jane Smith')+
+    fRow(fText('dl_phone','Phone'),fEmail('dl_email','Email (for receipt)'))+
+    fText('dl_addr','Address','Street, City, ST')+
+    fRow(fText('dl_date','Date','YYYY-MM-DD'),fSelect('dl_type','Type',[['delivery','Delivery'],['pickup','Pickup']]))+
+    fRow(fText('dl_ws','Window from','09:00'),fText('dl_we','Window to','17:00'))+
+    fRow(fNum('dl_rate','Rate ($)'),fSelect('dl_status','Status',[['pending','Pending'],['enroute','En route'],['arrived','Arrived'],['done','Delivered'],['failed','Failed']]))+
+    fRow(fSelect('dl_secured','Secured (verify ID)',[['no','No'],['yes','Yes']]),fNum('dl_minage','Min age (optional)'))+
+    fTextarea('dl_notes','Notes');
+  ffModal(id?'Edit delivery':'New delivery',body,()=>{
+    const cust=_val('dl_cust'); if(!cust){ alert('Customer name is required.'); return false; }
+    saveDelivery(id,{
+      customer:cust, phone:_val('dl_phone'), email:_val('dl_email'), address:_val('dl_addr'),
+      job_date:_val('dl_date')||null, type:_val('dl_type')||'delivery',
+      win_s:_val('dl_ws'), win_e:_val('dl_we'), rate:_numv('dl_rate'), status:_val('dl_status')||'pending',
+      secured:_val('dl_secured')==='yes', min_age:_numv('dl_minage')||null, notes:_val('dl_notes')
+    });
+  });
+  if(d){
+    const set=(f,v)=>{const e=document.getElementById(f); if(e)e.value=v;};
+    set('dl_cust',d.customer||''); set('dl_phone',d.phone||''); set('dl_email',d.email||'');
+    set('dl_addr',d.address||''); set('dl_date',d.job_date||''); set('dl_type',d.type||'delivery');
+    set('dl_ws',d.win_s||''); set('dl_we',d.win_e||''); set('dl_rate',d.rate||'');
+    set('dl_status',d.status||'pending'); set('dl_secured',d.secured?'yes':'no');
+    set('dl_minage',d.min_age||''); set('dl_notes',d.notes||'');
+  }
+}
+async function saveDelivery(id,fields){
+  if(!window.ffSupa||!window.FF_USER){ alert('Sign in to save deliveries.'); return; }
+  const row=Object.assign({},fields,{updated_at:new Date().toISOString()});
+  if(id){ row.id=id; } else { row.id='d'+Date.now().toString(36)+Math.floor(Math.random()*1000); row.source='desktop'; }
+  const i=DELIV.findIndex(x=>x.id===row.id);   // optimistic local update
+  if(i>=0) DELIV[i]=Object.assign({},DELIV[i],row); else DELIV.unshift(row);
+  if(page==='deliveries') rDeliveries(); rNav();
+  try{ const {error}=await window.ffSupa.from('jobs').upsert([row],{onConflict:'id'}); if(error) throw error; _toast('Delivery saved'); }
+  catch(e){ _toast('Save failed — check connection'); console.warn('saveDelivery',e.message); }
+}
+async function delDelivery(id){
+  if(!confirm('Delete this delivery? It will be removed from the mobile app too.')) return;
+  DELIV=DELIV.filter(x=>x.id!==id);
+  if(page==='deliveries') rDeliveries(); rNav();
+  try{ await window.ffSupa.from('jobs').delete().eq('id',id); _toast('Delivery deleted'); }
+  catch(e){ console.warn('delDelivery',e.message); }
+}
+
+// ============================================================
 // UTILITIES
 // ============================================================
 // HTML-escape any user- or network-sourced text before innerHTML interpolation
@@ -1562,6 +1679,7 @@ function _navBadgeOf(n,ov){
   if(n.badge&&ov>0)return{n:ov,style:''};
   if(n.inboxBadge&&INBOX.length>0)return{n:INBOX.length,style:'background:var(--bblue);color:var(--tblue)'};
   if(n.exBadge&&_openEx()>0)return{n:_openEx(),style:''};
+  if(n.delivBadge&&typeof delivOpenCount==='function'&&delivOpenCount()>0)return{n:delivOpenCount(),style:'background:var(--bblue);color:var(--tblue)'};
   return null;
 }
 function rNav(){
@@ -1601,7 +1719,7 @@ function go(p){
   const c=document.getElementById('content'); if(c)c.scrollTop=0;
 }
 function rPage(){if(selJob){rJobDetail();return;}if(sel){rDetail();return;}if(gcSel){rGCDetail();return;}({dashboard:rDash,leads:rLeads,inbox:rInbox,pipeline:rPipe,analytics:rAnalytics,carriers:rCarriers,tasks:rTasks,loadtool:rLoadTool,settings:rSettings,checklist:rChecklist,outreach:rOutreach,quoting:rQuoting,negotiation:rNegotiation,vetting:rVetting,float:rFloat,loadsdocs:rLoadsDocs,
-control:rControl,livejobs:rLiveJobs,exceptions:rExceptions,kpi:rKpi,neworder:rNewOrder,recurring:rRecurring,classifier:rClassifier,matrix:rMatrix,vehicles:rVehicles,routes:rRoutes,postal:rPostal,dispatch:rDispatchBoard,secure:rSecure,govconops:rGovConOps,sortstage:rSortStage,pod:rPOD,
+control:rControl,livejobs:rLiveJobs,exceptions:rExceptions,kpi:rKpi,neworder:rNewOrder,recurring:rRecurring,classifier:rClassifier,matrix:rMatrix,vehicles:rVehicles,routes:rRoutes,postal:rPostal,deliveries:rDeliveries,dispatch:rDispatchBoard,secure:rSecure,govconops:rGovConOps,sortstage:rSortStage,pod:rPOD,
 labels:()=>rDocsPage('label'),bols:()=>rDocsPage('bol'),dd1149:()=>rDocsPage('dd1149'),custody:()=>rDocsPage('custody'),podarchive:()=>rDocsPage('podreceipt'),vault:rVault,
 billing:rBilling,margins:rMargins,drivers:rDrivers,govcontacts:rGovContacts,apiconn:rApiConn,auditlog:rAuditLog,help:rHelp,
 gccommand:rGCCommand,gcopps:rGCOpps,gcpipeline:rGCPipeline,gcsync:rLiveSync,gcproposals:rGCProposals,gcrel:rGCRel,gcprofile:rGCProfile,gcawards:rAwards,gccontracts:rContracts,gctos:rTaskOrders,gcperf:rPerformance})[page]?.();}
@@ -5239,6 +5357,7 @@ if (_contentEl) new MutationObserver(()=>enhanceA11y()).observe(_contentEl,{chil
 _setSaveChip(window.FF_USER ? (_loaded ? 'cloud' : 'Cloud connected · not saved yet') : 'local');
 go('control');
 fetchInbox(); // pull website leads + populate inbox badge
+fetchDeliveries(); // shared driver job list + badge + live sync with mobile
 // Show subtle save indicator if data was loaded
 if (_loaded) {
   const _st = getSaveStatus();
