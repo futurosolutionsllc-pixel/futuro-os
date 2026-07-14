@@ -1,0 +1,27 @@
+# Netlify security headers for Futuro OS
+# Applied on deploy (Git push). Verify live with:  curl -sI https://futurofreight.netlify.app/ | grep -i -E 'x-frame|x-content|referrer|permissions|strict-transport'
+#
+# NOTE: no Content-Security-Policy is set here yet. The apps rely heavily on
+# inline scripts/styles (no build step), so a strict CSP needs 'unsafe-inline'
+# and a full host allowlist (supabase, jsdelivr, google-fonts, nominatim,
+# osrm, sam.gov, openstreetmap tiles). Add + test that against a Netlify deploy
+# preview before enforcing — a wrong CSP silently breaks production.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(self), camera=(self), microphone=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+# Clickjacking protection for the operator apps (must NOT be framed anywhere).
+/
+  X-Frame-Options: DENY
+/index.html
+  X-Frame-Options: DENY
+/mobile/*
+  X-Frame-Options: DENY
+
+# The lead/carrier forms are DESIGNED to be embedded in the marketing sites,
+# so instead of blocking frames we allowlist exactly those origins.
+/integrations/*
+  Content-Security-Policy: frame-ancestors 'self' https://futurosolutions.net https://futurotransport.com https://*.netlify.app

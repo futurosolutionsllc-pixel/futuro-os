@@ -1450,13 +1450,17 @@ function rInbox(){
 
 async function acceptInbound(id){
   const l=INBOX.find(x=>x.id===id); if(!l) return;
+  // Sanitize the untrusted public-form fields before they enter the stored CRM
+  // object (these render through many innerHTML sinks — see scrub()).
+  const co=scrub(l.company||l.name), nm=scrub(l.name), ph=scrub(l.phone),
+        em=scrub(l.email), lane=scrub(l.lane), message=scrub(l.message);
   // create a real CRM lead from the inbound inquiry
-  const lead={id:_genId('s'),co:l.company||l.name||'New Lead',st:'new',sg:'prospecting',sc:0,
-    ind:'',ph:l.phone||'',em:l.email||'',city:'',sta:'',src:'website',
+  const lead={id:_genId('s'),co:co||'New Lead',st:'new',sg:'prospecting',sc:0,
+    ind:'',ph:ph,em:em,city:'',sta:'',src:'website',
     fr:[EQUIP_MAP[l.equipment]||'dry_van'],vol:0,sp:0,mg:0,ld:0,rv:0,
     tg:['website-lead'],lc:Date.now(),fu:Date.now()+2*864e5,
-    activities:[{ic:'ti-world',su:'Inbound website inquiry',bo:(l.lane?'Lane: '+l.lane+'. ':'')+(l.message||''),oc:'new lead',ts:Date.now()}],
-    contacts: l.name?[{id:_genId('ct'),nm:l.name,ti:'Inquiry contact',ph:l.phone||'',em:l.email||''}]:[]};
+    activities:[{ic:'ti-world',su:'Inbound website inquiry',bo:(lane?'Lane: '+lane+'. ':'')+message,oc:'new lead',ts:Date.now()}],
+    contacts: nm?[{id:_genId('ct'),nm:nm,ti:'Inquiry contact',ph:ph,em:em}]:[]};
   S.unshift(lead); syncScore(lead);
   saveAll(); // cloud-saves the CRM with the new lead
   // mark the inbound row handled so it won't show again
@@ -1480,6 +1484,12 @@ async function dismissInbound(id){
 // HTML-escape any user- or network-sourced text before innerHTML interpolation
 // (esp. public inbound_leads fields). Prevents stored XSS. [P0 fix 2026-07-12]
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+// Sanitize UNTRUSTED network data (anonymous public inbound_* form rows) at the
+// trust boundary — strip tag-forming chars and cap length — before it is copied
+// into stored CRM objects that render through many innerHTML sinks. This is the
+// primary defense against stored XSS from the public lead funnel; esc() at the
+// render sinks is the second layer. [hardening 2026-07-14]
+function scrub(s){return String(s==null?'':s).replace(/[<>]/g,'').slice(0,2000);}
 const $m=n=>n>=1e6?'$'+(n/1e6).toFixed(1)+'M':n>=1e3?'$'+(n/1e3).toFixed(0)+'K':'$'+Math.round(n).toLocaleString();
 const $p=n=>Number(n).toFixed(1)+'%';
 const $a=ms=>{if(!ms)return'Never';const d=Math.floor((Date.now()-ms)/864e5);return d===0?'Today':d===1?'Yesterday':d<7?d+'d ago':d<30?Math.floor(d/7)+'w ago':Math.floor(d/30)+'mo ago';};
@@ -1802,7 +1812,7 @@ function dOv(s){
       <span style="flex:1;color:${f.blank?'var(--t3)':'var(--t1)'};${f.blank?'font-style:italic':''}">${f.v}</span>
       <span style="width:46px;text-align:right;font-weight:600;color:${f.blank?'var(--t3)':'var(--t2)'}">${f.p}/${f.max}</span>
     </div>`).join('');
-  const contactCard=`<div class="card"><div class="card-title">Contact Info</div>${[['<i class="ti ti-phone"></i>','Phone',s.ph],['<i class="ti ti-mail"></i>','Email',s.em],['<i class="ti ti-map-pin"></i>','Location',(s.city||'—')+', '+(s.sta||'—')],['<i class="ti ti-user"></i>','Source',s.src?.replace(/_/g,' ')],['<i class="ti ti-clock"></i>','Last Contact',$a(s.lc)]].map(([ic,l,v])=>`<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--b1)"><span style="font-size:14px;color:var(--t3);width:18px;flex-shrink:0">${ic}</span><div><div style="font-size:11px;color:var(--t3)">${l}</div><div style="font-size:12px;font-weight:600;color:var(--t1)">${v||'—'}</div></div></div>`).join('')}</div>`;
+  const contactCard=`<div class="card"><div class="card-title">Contact Info</div>${[['<i class="ti ti-phone"></i>','Phone',s.ph],['<i class="ti ti-mail"></i>','Email',s.em],['<i class="ti ti-map-pin"></i>','Location',(s.city||'—')+', '+(s.sta||'—')],['<i class="ti ti-user"></i>','Source',s.src?.replace(/_/g,' ')],['<i class="ti ti-clock"></i>','Last Contact',$a(s.lc)]].map(([ic,l,v])=>`<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--b1)"><span style="font-size:14px;color:var(--t3);width:18px;flex-shrink:0">${ic}</span><div><div style="font-size:11px;color:var(--t3)">${l}</div><div style="font-size:12px;font-weight:600;color:var(--t1)">${esc(v)||'—'}</div></div></div>`).join('')}</div>`;
   const profileCard=`<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div class="card-title" style="margin:0">Freight Profile</div>
@@ -1820,16 +1830,16 @@ function dOv(s){
 }
 function dAct(){
   const acts=(sel&&sel.activities)||[];
-  const rows = acts.length ? acts.map(a=>`<div class="arow"><div class="aicon"><i class="ti ${a.ic}"></i></div><div style="flex:1"><div style="display:flex;justify-content:space-between"><span style="font-size:12px;font-weight:600;color:var(--t1)">${a.su}</span><span style="font-size:11px;color:var(--t3)">${a.ts?$a(a.ts):''}</span></div>${a.bo?`<div style="font-size:11px;color:var(--t2);margin-top:3px;line-height:1.5">${a.bo}</div>`:''}${a.oc?`<span style="display:inline-block;margin-top:5px;font-size:11px;background:var(--bgreen);color:var(--tgreen);padding:2px 7px;border-radius:99px">${a.oc}</span>`:''}</div></div>`).join('')
+  const rows = acts.length ? acts.map(a=>`<div class="arow"><div class="aicon"><i class="ti ${a.ic}"></i></div><div style="flex:1"><div style="display:flex;justify-content:space-between"><span style="font-size:12px;font-weight:600;color:var(--t1)">${esc(a.su)}</span><span style="font-size:11px;color:var(--t3)">${a.ts?$a(a.ts):''}</span></div>${a.bo?`<div style="font-size:11px;color:var(--t2);margin-top:3px;line-height:1.5">${esc(a.bo)}</div>`:''}${a.oc?`<span style="display:inline-block;margin-top:5px;font-size:11px;background:var(--bgreen);color:var(--tgreen);padding:2px 7px;border-radius:99px">${esc(a.oc)}</span>`:''}</div></div>`).join('')
     : `<div style="padding:20px;text-align:center;font-size:12px;color:var(--t3)">No activity logged yet. Click <strong>+ Log Activity</strong> to add the first one.</div>`;
   return`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div class="card-title">Activity Timeline</div><button class="btn" onclick="logActivityForm()">+ Log Activity</button></div>${rows}</div>`;
 }
 function dCt(s){
   const cts=(s&&s.contacts)||[];
   const initials=nm=>nm.split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
-  const rows = cts.length ? cts.map(c=>`<div style="background:var(--bg4);border-radius:var(--rmd);padding:14px;display:flex;gap:12px;align-items:center;margin-bottom:8px"><div class="avatar" style="width:36px;height:36px;font-size:12px">${initials(c.nm)}</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--t1)">${c.nm}</div><div style="font-size:11px;color:var(--t3)">${c.ti||'Contact'}</div></div><div style="text-align:right;font-size:11px;color:var(--t2)">${c.ph?`<div>${c.ph}</div>`:''}${c.em?`<div>${c.em}</div>`:''}</div></div>`).join('')
+  const rows = cts.length ? cts.map(c=>`<div style="background:var(--bg4);border-radius:var(--rmd);padding:14px;display:flex;gap:12px;align-items:center;margin-bottom:8px"><div class="avatar" style="width:36px;height:36px;font-size:12px">${esc(initials(c.nm))}</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--t1)">${esc(c.nm)}</div><div style="font-size:11px;color:var(--t3)">${esc(c.ti||'Contact')}</div></div><div style="text-align:right;font-size:11px;color:var(--t2)">${c.ph?`<div>${esc(c.ph)}</div>`:''}${c.em?`<div>${esc(c.em)}</div>`:''}</div></div>`).join('')
     : `<div style="padding:20px;text-align:center;font-size:12px;color:var(--t3)">No contacts yet. Click <strong>+ Add Contact</strong> to add one.</div>`;
-  return`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div class="card-title">Contacts at ${s.co}</div><button class="btn" onclick="addContactForm()">+ Add Contact</button></div>${rows}</div>`;
+  return`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div class="card-title">Contacts at ${esc(s.co)}</div><button class="btn" onclick="addContactForm()">+ Add Contact</button></div>${rows}</div>`;
 }
 function rPipe(){
   const m={};STGS.forEach(sg=>{m[sg.id]=[];});S.forEach(s=>{if(m[s.sg])m[s.sg].push(s);});
@@ -5189,7 +5199,7 @@ function clearAuditLog(){
 // ---------- Portal Inbox → New Order prefill ----------
 function orderFromInbound(id){
   const l=INBOX.find(x=>x.id===id);if(!l)return;
-  window._noPrefill={customerName:l.company||l.name||'',contactName:l.name||'',contactEmail:l.email||'',contactPhone:l.phone||'',contentsDescription:(l.message||'').slice(0,120),intakeSource:'portal'};
+  window._noPrefill={customerName:scrub(l.company||l.name),contactName:scrub(l.name),contactEmail:scrub(l.email),contactPhone:scrub(l.phone),contentsDescription:scrub(l.message).slice(0,120),intakeSource:'portal'};
   go('neworder');
 }
 
