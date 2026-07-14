@@ -52,9 +52,9 @@ const S = {
   view: 'today'
 };
 
-const saveJobs = () => localStorage.setItem('fos.jobs', JSON.stringify(S.jobs));
-const saveDeals = () => localStorage.setItem('deals', JSON.stringify(S.deals));
-const saveSettings = () => localStorage.setItem('fos.settings', JSON.stringify(S.settings));
+const saveJobs = () => { localStorage.setItem('fos.jobs', JSON.stringify(S.jobs)); queueCloudSave(); };
+const saveDeals = () => { localStorage.setItem('deals', JSON.stringify(S.deals)); queueCloudSave(); };
+const saveSettings = () => { localStorage.setItem('fos.settings', JSON.stringify(S.settings)); queueCloudSave(); };
 
 const jobsOn = date => S.jobs.filter(j => j.date === date).sort((a, b) => (a.seq || 0) - (b.seq || 0));
 const openJobsOn = date => jobsOn(date).filter(j => j.status !== 'done' && j.status !== 'failed');
@@ -970,6 +970,117 @@ async function geocodeHome() {
   } catch (e) { $('homeGeoStatus').textContent = '⚠ not found'; }
 }
 
+/* ---------------- cloud sync (same Supabase project + account as Futuro OS desktop)
+   Desktop saves its CRM state to the `snapshot` table (one row per user).
+   Mobile uses its own `mobile_snapshot` table with the same owner/RLS shape,
+   so the two apps share a login but can never overwrite each other.
+   localStorage stays the source of truth offline; cloud is the backup/carry. */
+const FF_SUPABASE_URL = 'https://plsimvwufpqquuipkysi.supabase.co';
+const FF_SUPABASE_KEY = 'sb_publishable_nXrPTG_v935fahzd7q_ZWQ_0A7t8s3J';
+let supa = null, cloudUser = null, _cloudTimer = null, _cloudApplying = false;
+
+function initCloud() {
+  if (!window.supabase) { updateCloudUi(); return; } // CDN unreachable → local-only mode
+  supa = window.supabase.createClient(FF_SUPABASE_URL, FF_SUPABASE_KEY);
+  supa.auth.getSession().then(({data}) => {
+    if (data && data.session) { cloudUser = data.session.user; updateCloudUi(); pullCloud(); }
+    else updateCloudUi();
+  }).catch(() => updateCloudUi());
+}
+const cloudState = () => ({schema: 1, jobs: S.jobs, deals: S.deals, settings: S.settings, savedAt: Date.now()});
+function applyCloudState(d) {
+  if (!d || !Array.isArray(d.jobs)) return false;
+  _cloudApplying = true;
+  try {
+    S.jobs = d.jobs; saveJobs();
+    if (Array.isArray(d.deals)) { S.deals = d.deals; saveDeals(); }
+    if (d.settings) { S.settings = Object.assign({}, DEFAULT_SETTINGS, d.settings); saveSettings(); }
+    if (d.savedAt) localStorage.setItem('fos.savedAt', String(d.savedAt));
+  } finally { _cloudApplying = false; }
+  return true;
+}
+async function pullCloud() {
+  if (!supa || !cloudUser) return;
+  try {
+    const {data: row, error} = await supa.from('mobile_snapshot')
+      .select('data').eq('owner', cloudUser.id).maybeSingle();
+    if (error) { updateCloudUi('cloud error: ' + error.message); return; }
+    const localAt = +(localStorage.getItem('fos.savedAt') || 0);
+    if (row && row.data && (row.data.savedAt || 0) > localAt) {
+      applyCloudState(row.data);
+      render(); loadSettingsForm();
+      toast('Cloud data loaded');
+      updateCloudUi();
+    } else {
+      pushCloud(); // no cloud row yet, or this phone is newer
+    }
+  } catch (e) { updateCloudUi('offline — local only'); }
+}
+async function pushCloud() {
+  if (!supa || !cloudUser) return;
+  const data = cloudState();
+  localStorage.setItem('fos.savedAt', String(data.savedAt));
+  try {
+    const {error} = await supa.from('mobile_snapshot')
+      .upsert({owner: cloudUser.id, data, updated_at: new Date().toISOString()}, {onConflict: 'owner'});
+    updateCloudUi(error ? 'cloud error: ' + error.message : null);
+  } catch (e) { updateCloudUi('offline — will retry on next save'); }
+}
+function queueCloudSave() {
+  if (_cloudApplying) return;
+  localStorage.setItem('fos.savedAt', String(Date.now()));
+  if (!supa || !cloudUser) return;
+  clearTimeout(_cloudTimer);
+  _cloudTimer = setTimeout(pushCloud, 800);
+}
+function updateCloudUi(err) {
+  const dot = $('cloudDot'), st = $('cloudStatus'), auth = $('btnCloudAuth'), push = $('btnCloudPush');
+  const on = !!(supa && cloudUser);
+  dot.className = 'ti cloud-dot ' + (on ? 'ti-cloud-check on' : 'ti-cloud-off');
+  dot.title = on ? 'Cloud sync on' : 'Cloud sync off';
+  if (err && on) { dot.className = 'ti ti-cloud-exclamation cloud-dot'; }
+  if (st) {
+    if (!window.supabase) st.textContent = 'Cloud library unavailable (offline?) — data stays on this phone.';
+    else if (!on) st.textContent = 'Not signed in — data stays on this phone.';
+    else st.textContent = err || `Synced as ${cloudUser.email} — jobs back up automatically.`;
+  }
+  if (auth) auth.innerHTML = on ? '<i class="ti ti-logout"></i> Sign out' : '<i class="ti ti-cloud"></i> Sign in';
+  if (push) push.hidden = !on;
+}
+async function cloudAuthClick() {
+  if (!window.supabase) { toast('Cloud unavailable — check connection'); return; }
+  if (cloudUser) {
+    await supa.auth.signOut().catch(() => {});
+    cloudUser = null;
+    updateCloudUi();
+    toast('Signed out — data stays on this phone');
+    return;
+  }
+  $('authStatus').textContent = '';
+  $('authSheet').hidden = false;
+}
+async function doAuth(signup) {
+  const email = $('authEmail').value.trim(), pass = $('authPass').value;
+  const st = $('authStatus');
+  if (!email || !pass) { st.textContent = 'Enter email and password.'; return; }
+  st.textContent = signup ? 'Creating account…' : 'Signing in…';
+  try {
+    const {data, error} = signup
+      ? await supa.auth.signUp({email, password: pass})
+      : await supa.auth.signInWithPassword({email, password: pass});
+    if (error) { st.textContent = error.message; return; }
+    if (data.session || data.user && !signup) {
+      cloudUser = (data.session && data.session.user) || data.user;
+      $('authSheet').hidden = true;
+      updateCloudUi();
+      pullCloud();
+      toast('Signed in — cloud sync on');
+    } else {
+      st.textContent = 'Account created. If email confirmation is on, check your inbox, then Sign in.';
+    }
+  } catch (e) { st.textContent = 'Network error — try again.'; }
+}
+
 /* ---------------- wiring ---------------- */
 function wire() {
   document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => show(t.dataset.view)));
@@ -1020,6 +1131,12 @@ function wire() {
     $('dealTitle').value = ''; $('dealValue').value = '';
     saveDeals(); renderBiz();
   });
+  // Cloud
+  $('btnCloudAuth').addEventListener('click', cloudAuthClick);
+  $('btnCloudPush').addEventListener('click', () => { pushCloud(); toast('Syncing…'); });
+  $('btnLogin').addEventListener('click', () => doAuth(false));
+  $('btnSignup').addEventListener('click', () => doAuth(true));
+  $('authPass').addEventListener('keydown', e => { if (e.key === 'Enter') doAuth(false); });
   // Settings
   $('btnSettings').addEventListener('click', () => { loadSettingsForm(); $('settingsSheet').hidden = false; });
   $('btnSaveSettings').addEventListener('click', () => saveSettingsForm());
@@ -1037,9 +1154,10 @@ function shiftDay(delta) {
 
 /* ---------------- init ---------------- */
 wire();
-$('brandSub').textContent = S.settings.company;
+$('brandSub').textContent = 'Mobile Ops — ' + S.settings.company;
 show('today');
 startGps();
+initCloud();
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
