@@ -1,5 +1,5 @@
 /* FuturoOS service worker — offline app shell */
-const CACHE = 'fos-v3';
+const CACHE = 'fos-v4';
 const SHELL = [
   './',
   './index.html',
@@ -7,6 +7,7 @@ const SHELL = [
   './app.js',
   './manifest.webmanifest',
   './icons/icon.svg',
+  './icons/icon-180.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './vendor/leaflet/leaflet.css',
@@ -18,7 +19,7 @@ const SHELL = [
   './vendor/leaflet/images/layers-2x.png',
   './icons/mark.svg',
   // brand chrome (best-effort: install succeeds even if these are unreachable)
-  'https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap',
+  'https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap',
   'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
 ];

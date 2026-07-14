@@ -502,7 +502,7 @@ function renderMap() {
   jobs.forEach((j, i) => {
     const done = j.status === 'done' || j.status === 'failed';
     const ico = L.divIcon({className: '', html:
-      `<div style="width:26px;height:26px;border-radius:50%;background:${done ? '#46546b' : 'linear-gradient(135deg,#2ee6a4,#0da173)'};color:${done ? '#eaf0fb' : '#032a1d'};display:grid;place-items:center;font:700 12px 'JetBrains Mono',monospace;border:2px solid #06080f;box-shadow:0 0 10px rgba(34,211,155,.4)">${i + 1}</div>`});
+      `<div style="width:26px;height:26px;border-radius:50%;background:${done ? '#46546b' : 'linear-gradient(135deg,#2ee6a4,#0da173)'};color:${done ? '#eaf0fb' : '#032a1d'};display:grid;place-items:center;font:700 12px 'Syne',sans-serif;border:2px solid #06080f;box-shadow:0 0 10px rgba(34,211,155,.4)">${i + 1}</div>`});
     L.marker([j.lat, j.lng], {icon: ico}).addTo(mapLayer)
       .bindPopup(`<b>${esc(j.customer || '')}</b><br>${esc(j.address || '')}<br>${j.status}`);
     pts.push([j.lat, j.lng]);
@@ -1081,6 +1081,33 @@ async function doAuth(signup) {
   } catch (e) { st.textContent = 'Network error — try again.'; }
 }
 
+/* ---------------- install (Android one-tap prompt / iOS Share instructions) ---------------- */
+let deferredInstall = null;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; updateInstallUi(); });
+window.addEventListener('appinstalled', () => { deferredInstall = null; updateInstallUi(); toast('Installed — find Futuro OS on your home screen'); });
+function updateInstallUi() {
+  const b = $('installBanner');
+  if (isStandalone() || localStorage.getItem('fos.installDismissed')) { b.hidden = true; return; }
+  if (deferredInstall) {
+    $('installText').textContent = 'Install Futuro OS on this phone — full screen, works offline.';
+    $('btnInstall').hidden = false;
+    b.hidden = false;
+  } else if (isIos()) {
+    $('installText').innerHTML = 'Install on iPhone: tap <b>Share</b> <i class="ti ti-share-2"></i> then <b>Add to Home Screen</b>.';
+    $('btnInstall').hidden = true;
+    b.hidden = false;
+  } else b.hidden = true;
+}
+async function doInstall() {
+  if (!deferredInstall) return;
+  deferredInstall.prompt();
+  await deferredInstall.userChoice.catch(() => {});
+  deferredInstall = null;
+  updateInstallUi();
+}
+
 /* ---------------- wiring ---------------- */
 function wire() {
   document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => show(t.dataset.view)));
@@ -1131,6 +1158,12 @@ function wire() {
     $('dealTitle').value = ''; $('dealValue').value = '';
     saveDeals(); renderBiz();
   });
+  // Install
+  $('btnInstall').addEventListener('click', doInstall);
+  $('installDismiss').addEventListener('click', () => {
+    localStorage.setItem('fos.installDismissed', '1');
+    $('installBanner').hidden = true;
+  });
   // Cloud
   $('btnCloudAuth').addEventListener('click', cloudAuthClick);
   $('btnCloudPush').addEventListener('click', () => { pushCloud(); toast('Syncing…'); });
@@ -1158,6 +1191,7 @@ $('brandSub').textContent = 'Mobile Ops — ' + S.settings.company;
 show('today');
 startGps();
 initCloud();
+updateInstallUi();
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
