@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Haul With Us — Futuro Transport</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&display=swap">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Syne',system-ui,sans-serif;background:#06080f;color:#eaf0fb;padding:24px;min-height:100vh;display:flex;align-items:flex-start;justify-content:center}
+.ff-form{width:100%;max-width:520px;background:rgba(13,19,32,0.82);border:1px solid rgba(96,232,182,.3);border-radius:14px;padding:24px;box-shadow:0 10px 34px rgba(0,0,0,.4),0 0 22px rgba(34,211,155,.10)}
+h1{font-size:18px;color:#9df0cc;margin-bottom:4px}
+.sub{font-size:12.5px;color:#6f7f99;margin-bottom:18px}
+label{display:block;font-size:10.5px;color:#4fd8a4;text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;font-weight:600}
+input,select,textarea{
+  width:100%;margin-top:5px;padding:11px 12px;font-size:14px;font-family:inherit;
+  background:rgba(255,255,255,0.045);color:#eaf0fb;border:1px solid rgba(124,156,214,0.20);border-radius:10px;outline:none;
+}
+input:focus,select:focus,textarea:focus{border-color:#3ce9ae;box-shadow:0 0 0 2px rgba(52,224,138,.18)}
+select option{background:#0d1321}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button{
+  width:100%;padding:13px;margin-top:6px;border:none;border-radius:10px;cursor:pointer;
+  font-family:inherit;font-size:15px;font-weight:700;color:#032a1d;
+  background:linear-gradient(135deg,#2ee6a4,#0da173);
+  box-shadow:0 0 0 1px rgba(120,255,200,.35),0 2px 16px rgba(34,211,155,.45);
+}
+button:disabled{opacity:.6;cursor:wait}
+.msg{margin-top:12px;font-size:13px;min-height:18px;text-align:center}
+.msg.ok{color:#52e3b8}
+.msg.err{color:#ff8b96}
+.hp{position:absolute;left:-9999px;opacity:0;height:0;overflow:hidden}
+</style>
+</head>
+<body>
+<form class="ff-form" id="ffCarrierForm">
+  <h1>Haul with Futuro Transport</h1>
+  <div class="sub">Join our carrier network — steady freight, fast pay.</div>
+  <div class="row">
+    <label>Your name <input name="name" required autocomplete="name"></label>
+    <label>Company <input name="company" required autocomplete="organization"></label>
+  </div>
+  <div class="row">
+    <label>Email <input name="email" type="email" required autocomplete="email"></label>
+    <label>Phone <input name="phone" inputmode="tel" autocomplete="tel"></label>
+  </div>
+  <div class="row">
+    <label>MC # <input name="mc" placeholder="MC-000000"></label>
+    <label>DOT # <input name="dot" placeholder="0000000"></label>
+  </div>
+  <div class="row">
+    <label>Equipment
+      <select name="equipment">
+        <option>Dry Van</option>
+        <option>Reefer</option>
+        <option>Flatbed</option>
+        <option>Box Truck / Sprinter</option>
+        <option>Other / Multiple</option>
+      </select>
+    </label>
+    <label>Preferred lanes <input name="lanes" placeholder="e.g. VA / MD / DC triangle"></label>
+  </div>
+  <label>Anything else? <textarea name="message" rows="3" placeholder="Truck count, availability, references…"></textarea></label>
+  <label class="hp" aria-hidden="true">Leave this empty <input name="website" tabindex="-1" autocomplete="off"></label>
+  <button type="submit" id="ffSubmit">Join the network</button>
+  <div class="msg" id="ffMsg"></div>
+</form>
+
+<script>
+/* Posts straight into Futuro OS (Supabase inbound_carriers). */
+const FF_URL = 'https://plsimvwufpqquuipkysi.supabase.co/rest/v1/inbound_carriers';
+const FF_KEY = 'sb_publishable_nXrPTG_v935fahzd7q_ZWQ_0A7t8s3J';
+
+document.getElementById('ffCarrierForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target, msg = document.getElementById('ffMsg'), btn = document.getElementById('ffSubmit');
+  if (f.website.value) return; // honeypot
+  const body = {
+    name: f.name.value.trim(),
+    company: f.company.value.trim(),
+    email: f.email.value.trim(),
+    phone: f.phone.value.trim(),
+    mc: f.mc.value.trim(),
+    dot: f.dot.value.trim(),
+    equipment: f.equipment.value,
+    lanes: f.lanes.value.trim(),
+    message: f.message.value.trim(),
+    source: new URLSearchParams(location.search).get('source') || location.hostname || 'website'
+  };
+  btn.disabled = true;
+  msg.className = 'msg';
+  msg.textContent = 'Sending…';
+  try {
+    const res = await fetch(FF_URL, {
+      method: 'POST',
+      headers: {'apikey': FF_KEY, 'Authorization': 'Bearer ' + FF_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal'},
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    f.reset();
+    msg.className = 'msg ok';
+    msg.textContent = '✓ Received — we’ll reach out to get you set up.';
+  } catch (err) {
+    msg.className = 'msg err';
+    msg.textContent = 'Could not send right now — please call or email us directly.';
+  } finally { btn.disabled = false; }
+});
+</script>
+</body>
+</html>

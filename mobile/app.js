@@ -359,6 +359,7 @@ function show(view) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
   if (view === 'map') initMap();
   if (view === 'drive') startGps();
+  if (view === 'biz' && typeof supa !== 'undefined' && supa && cloudUser) fetchInbox();
   render();
 }
 
@@ -882,8 +883,65 @@ function attachTips(root) {
   });
 }
 
+/* ---------------- website inbox (same inbound_leads funnel the desktop reads) ---------------- */
+let inbox = [], inboxLoaded = false;
+async function fetchInbox() {
+  if (!supa || !cloudUser) { inboxLoaded = false; renderInbox(); return; }
+  try {
+    const {data, error} = await supa.from('inbound_leads')
+      .select('*').eq('status', 'new').order('created_at', {ascending: false});
+    if (!error) { inbox = data || []; inboxLoaded = true; }
+  } catch (e) { /* offline — keep whatever we had */ }
+  renderInbox();
+}
+function renderInbox() {
+  const hint = $('inboxHint'), list = $('bizInbox');
+  if (!supa || !cloudUser) {
+    hint.textContent = 'Sign in (Settings → Cloud sync) to see inquiries from your websites.';
+    list.innerHTML = '';
+    return;
+  }
+  hint.textContent = inboxLoaded
+    ? (inbox.length ? `${inbox.length} new ${inbox.length === 1 ? 'inquiry' : 'inquiries'}` : 'No new inquiries — website leads land here.')
+    : 'Loading…';
+  list.innerHTML = inbox.map(l => `
+    <div class="stop" data-id="${esc(l.id)}" style="cursor:default">
+      <div class="stop-body">
+        <div class="stop-name">${esc(l.company || l.name || '(no company)')}</div>
+        <div class="stop-addr">${esc(l.name || '')}${l.name && (l.email || l.phone) ? ' · ' : ''}${esc(l.email || '')}${l.email && l.phone ? ' · ' : ''}${esc(l.phone || '')}</div>
+        <div class="stop-meta">
+          <span class="badge status-enroute">${esc(l.source || 'website')}</span>
+          ${l.equipment ? `<span class="badge">${esc(l.equipment)}</span>` : ''}
+          ${l.lane ? `<span>${esc(l.lane)}</span>` : ''}
+        </div>
+        ${l.message ? `<div class="hint" style="margin-top:6px">${esc(l.message)}</div>` : ''}
+        <div class="row gap8" style="margin-top:10px">
+          <button class="btn small grow" data-inbox="dismiss">Dismiss</button>
+          <button class="btn small success grow" data-inbox="accept"><i class="ti ti-plus"></i> Add to pipeline</button>
+        </div>
+      </div>
+    </div>`).join('');
+  list.querySelectorAll('[data-inbox]').forEach(b => b.addEventListener('click', () =>
+    inboxAction(b.closest('.stop').dataset.id, b.dataset.inbox)));
+}
+async function inboxAction(id, action) {
+  const l = inbox.find(x => x.id === id);
+  if (!l) return;
+  if (action === 'accept') {
+    S.deals.push({id: Date.now() + Math.random(), type: 'web',
+      title: (l.company || l.name || 'Website lead') + (l.lane ? ' — ' + l.lane : ''), value: 0, stage: 'lead'});
+    saveDeals();
+  }
+  try { await supa.from('inbound_leads').update({status: action === 'accept' ? 'accepted' : 'dismissed'}).eq('id', id); }
+  catch (e) { toast('Offline — will remain in inbox'); return; }
+  inbox = inbox.filter(x => x.id !== id);
+  renderInbox();
+  if (action === 'accept') { renderBiz(); toast('Added to pipeline'); }
+}
+
 /* ---------------- BIZ (pipeline + SAM.gov) ---------------- */
 function renderBiz() {
+  renderInbox();
   ['lead', 'active', 'closed'].forEach(st => { $(st).innerHTML = ''; });
   if ($('apiKey').value === '' && S.settings.samKey) $('apiKey').value = S.settings.samKey;
   S.deals.forEach(d => {
@@ -983,7 +1041,7 @@ function initCloud() {
   if (!window.supabase) { updateCloudUi(); return; } // CDN unreachable → local-only mode
   supa = window.supabase.createClient(FF_SUPABASE_URL, FF_SUPABASE_KEY);
   supa.auth.getSession().then(({data}) => {
-    if (data && data.session) { cloudUser = data.session.user; updateCloudUi(); pullCloud(); }
+    if (data && data.session) { cloudUser = data.session.user; updateCloudUi(); pullCloud(); fetchInbox(); }
     else updateCloudUi();
   }).catch(() => updateCloudUi());
 }
@@ -1074,6 +1132,7 @@ async function doAuth(signup) {
       $('authSheet').hidden = true;
       updateCloudUi();
       pullCloud();
+      fetchInbox();
       toast('Signed in — cloud sync on');
     } else {
       st.textContent = 'Account created. If email confirmation is on, check your inbox, then Sign in.';
@@ -1150,6 +1209,7 @@ function wire() {
     renderStats();
   }));
   // Biz
+  $('btnInboxRefresh').addEventListener('click', fetchInbox);
   $('btnGov').addEventListener('click', loadGov);
   $('btnAddDeal').addEventListener('click', () => {
     const t = $('dealTitle').value.trim();
