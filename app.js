@@ -387,10 +387,10 @@ function stopCard(j, i, etas) {
       <div class="stop-addr">${esc(j.address || 'No address')}</div>
       <div class="stop-meta">
         ${statusBadge(j)}
-        ${win ? `<span>🕐 ${win}</span>` : ''}
+        ${win ? `<span><i class="ti ti-clock"></i> ${win}</span>` : ''}
         ${eta ? `<span class="badge ${eta.late ? 'late' : 'ontime'}">${eta.late ? '▲ Late' : '● On time'} · ETA ${fmtTime(eta.arrive)}</span>` : ''}
         ${j.rate ? `<span>${fmt$(j.rate)}</span>` : ''}
-        ${j.lat == null ? '<span class="badge late">⚠ no location</span>' : ''}
+        ${j.lat == null ? '<span class="badge late"><i class="ti ti-alert-triangle"></i> no location</span>' : ''}
       </div>
     </div>
   </div>`;
@@ -427,7 +427,7 @@ function renderDrive() {
   const jobs = jobsOn(S.date);
   const j = currentStop();
   if (!jobs.length) {
-    c.innerHTML = `<div class="drive-done"><div class="big-emoji">🗓</div><p>No stops scheduled for ${S.date}.</p>
+    c.innerHTML = `<div class="drive-done"><div class="big-emoji"><i class="ti ti-calendar"></i></div><p>No stops scheduled for ${S.date}.</p>
       <button class="btn primary" onclick="openJobSheet()">+ Add a job</button></div>`;
     return;
   }
@@ -435,7 +435,7 @@ function renderDrive() {
     const done = jobs.filter(x => x.status === 'done');
     const failed = jobs.filter(x => x.status === 'failed');
     const rev = done.reduce((s, x) => s + (+x.rate || 0), 0);
-    c.innerHTML = `<div class="drive-done"><div class="big-emoji">🏁</div>
+    c.innerHTML = `<div class="drive-done"><div class="big-emoji"><i class="ti ti-flag-checkered"></i></div>
       <h2>Day complete</h2>
       <p>${done.length} delivered · ${failed.length} failed · ${fmt$(rev)} earned · ${fmtMi(milesOn(S.date))} driven</p>
       <button class="btn" onclick="show('stats')">View stats</button></div>`;
@@ -448,9 +448,9 @@ function renderDrive() {
   const stopNo = jobs.indexOf(j) + 1;
   const win = (j.winS || j.winE) ? ` · window ${j.winS || '…'}–${j.winE || '…'}` : '';
   let action;
-  if (j.status === 'pending') action = `<button class="drive-btn primary big" data-act="start"><span class="ico">▶</span>Start stop</button>`;
-  else if (j.status === 'enroute') action = `<button class="drive-btn primary big" data-act="arrived"><span class="ico">📍</span>I've arrived</button>`;
-  else action = `<button class="drive-btn success big" data-act="pod"><span class="ico">✓</span>Proof of delivery</button>`;
+  if (j.status === 'pending') action = `<button class="drive-btn primary big" data-act="start"><i class="ti ti-player-play ico"></i>Start stop</button>`;
+  else if (j.status === 'enroute') action = `<button class="drive-btn primary big" data-act="arrived"><i class="ti ti-map-pin ico"></i>I've arrived</button>`;
+  else action = `<button class="drive-btn success big" data-act="pod"><i class="ti ti-checklist ico"></i>Proof of delivery</button>`;
   c.innerHTML = `<div class="drive-card">
     <div class="drive-kicker">Stop ${stopNo} of ${jobs.length} · ${j.type}${win}</div>
     <div class="drive-name">${esc(j.customer || 'Unnamed')}</div>
@@ -458,10 +458,10 @@ function renderDrive() {
     <div class="drive-eta">${eta ? `ETA <b>${fmtTime(eta.arrive)}</b> ${eta.late ? '<span class="badge late">▲ Late risk</span>' : '<span class="badge ontime">● On time</span>'}` : ''}
       ${j.notes ? `<br>📝 ${esc(j.notes)}` : ''}</div>
     <div class="drive-grid">
-      <button class="drive-btn" data-act="nav"><span class="ico">🧭</span>Navigate</button>
-      <button class="drive-btn" data-act="call"><span class="ico">📞</span>Call</button>
-      <button class="drive-btn" data-act="sms-way"><span class="ico">💬</span>Text ETA</button>
-      <button class="drive-btn" data-act="sms-arr"><span class="ico">🏠</span>Text arrived</button>
+      <button class="drive-btn" data-act="nav"><i class="ti ti-navigation ico"></i>Navigate</button>
+      <button class="drive-btn" data-act="call"><i class="ti ti-phone ico"></i>Call</button>
+      <button class="drive-btn" data-act="sms-way"><i class="ti ti-message-circle ico"></i>Text ETA</button>
+      <button class="drive-btn" data-act="sms-arr"><i class="ti ti-home ico"></i>Text arrived</button>
       ${action}
     </div>
     ${next ? `<div class="drive-next">Next: ${esc(next.customer || '')} — ${esc(next.address || '')}</div>` : '<div class="drive-next">Last stop of the day</div>'}
@@ -491,7 +491,7 @@ function initMap() {
 function updateMyMarker() {
   if (!map || !S.pos) return;
   if (!myMarker) {
-    myMarker = L.circleMarker([S.pos.lat, S.pos.lng], {radius: 8, color: '#3987e5', fillColor: '#3987e5', fillOpacity: .9}).addTo(map);
+    myMarker = L.circleMarker([S.pos.lat, S.pos.lng], {radius: 8, color: '#86a6ff', fillColor: '#3b72ff', fillOpacity: .9}).addTo(map);
   } else myMarker.setLatLng([S.pos.lat, S.pos.lng]);
 }
 function renderMap() {
@@ -502,15 +502,15 @@ function renderMap() {
   jobs.forEach((j, i) => {
     const done = j.status === 'done' || j.status === 'failed';
     const ico = L.divIcon({className: '', html:
-      `<div style="width:26px;height:26px;border-radius:50%;background:${done ? '#374151' : '#2563eb'};color:#fff;display:grid;place-items:center;font:700 12px system-ui;border:2px solid #0b0f1a">${i + 1}</div>`});
+      `<div style="width:26px;height:26px;border-radius:50%;background:${done ? '#46546b' : 'linear-gradient(135deg,#2ee6a4,#0da173)'};color:${done ? '#eaf0fb' : '#032a1d'};display:grid;place-items:center;font:700 12px 'JetBrains Mono',monospace;border:2px solid #06080f;box-shadow:0 0 10px rgba(34,211,155,.4)">${i + 1}</div>`});
     L.marker([j.lat, j.lng], {icon: ico}).addTo(mapLayer)
       .bindPopup(`<b>${esc(j.customer || '')}</b><br>${esc(j.address || '')}<br>${j.status}`);
     pts.push([j.lat, j.lng]);
   });
   const geom = S.routeGeom[S.date];
   const openPts = openJobsOn(S.date).filter(j => j.lat != null).map(j => [j.lat, j.lng]);
-  if (geom) L.polyline(geom, {color: '#3987e5', weight: 3, opacity: .8}).addTo(mapLayer);
-  else if (openPts.length > 1) L.polyline(openPts, {color: '#3987e5', weight: 2, dashArray: '6 6', opacity: .6}).addTo(mapLayer);
+  if (geom) L.polyline(geom, {color: '#22d39b', weight: 3, opacity: .8}).addTo(mapLayer);
+  else if (openPts.length > 1) L.polyline(openPts, {color: '#22d39b', weight: 2, dashArray: '6 6', opacity: .6}).addTo(mapLayer);
   updateMyMarker();
   if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.2));
   $('mapLegend').innerHTML = jobs.length
@@ -625,10 +625,10 @@ function openDetail(id) {
     <div class="stop-name" style="font-size:18px">${esc(j.customer || 'Unnamed')}</div>
     <div class="stop-addr" style="white-space:normal">${esc(j.address || '')}</div>
     <div style="margin:10px 0" class="row gap8">
-      <button class="btn small" id="dEdit">✎ Edit</button>
-      <button class="btn small" id="dNav">🧭 Navigate</button>
-      ${j.status !== 'done' && j.status !== 'failed' ? '<button class="btn small success" id="dPod">✓ POD</button>' : ''}
-      ${j.status === 'done' || j.status === 'failed' ? '<button class="btn small" id="dReopen">↩ Reopen</button>' : ''}
+      <button class="btn small" id="dEdit"><i class="ti ti-pencil"></i> Edit</button>
+      <button class="btn small" id="dNav"><i class="ti ti-navigation"></i> Navigate</button>
+      ${j.status !== 'done' && j.status !== 'failed' ? '<button class="btn small success" id="dPod"><i class="ti ti-checklist"></i> POD</button>' : ''}
+      ${j.status === 'done' || j.status === 'failed' ? '<button class="btn small" id="dReopen"><i class="ti ti-arrow-back-up"></i> Reopen</button>' : ''}
     </div>
     ${rows.map(r => `<div class="detail-row"><span>${r[0]}</span><span>${esc(r[1])}</span></div>`).join('')}
     ${pod}
@@ -788,17 +788,17 @@ function barChart({title, data, color, fmt, id}) {
     const labeled = i === maxIdx || i === data.length - 1; // selective direct labels
     return `<path d="${barPath(x, y, bw, Math.max(h, d.value ? 2 : 0), 4)}" fill="${color}"
         data-tip="${esc(d.label)}: ${esc(fmt(d.value))}"></path>
-      ${labeled && d.value ? `<text x="${x + bw / 2}" y="${y - 5}" text-anchor="middle" fill="#c3c2b7" font-size="11">${esc(fmt(d.value))}</text>` : ''}`;
+      ${labeled && d.value ? `<text x="${x + bw / 2}" y="${y - 5}" text-anchor="middle" fill="#9fb1cc" font-size="11">${esc(fmt(d.value))}</text>` : ''}`;
   }).join('');
   const ticks = data.map((d, i) => (data.length <= 9 || i % Math.ceil(data.length / 7) === 0)
-    ? `<text x="${padL + i * iw + iw / 2}" y="${H - 6}" text-anchor="middle" fill="#898781" font-size="10">${esc(d.label)}</text>` : '').join('');
+    ? `<text x="${padL + i * iw + iw / 2}" y="${H - 6}" text-anchor="middle" fill="#6f7f99" font-size="10">${esc(d.label)}</text>` : '').join('');
   const grid = [0.5, 1].map(f =>
-    `<line x1="${padL}" x2="${W - padL}" y1="${H - padB - f * (H - padB - padT)}" y2="${H - padB - f * (H - padB - padT)}" stroke="#2c2c2a" stroke-width="1"/>`).join('');
+    `<line x1="${padL}" x2="${W - padL}" y1="${H - padB - f * (H - padB - padT)}" y2="${H - padB - f * (H - padB - padT)}" stroke="rgba(124,156,214,0.14)" stroke-width="1"/>`).join('');
   return `<div class="chart-card">
     <div class="chart-title">${title}</div>
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${title}" data-chart="${id}">
       ${grid}
-      <line x1="${padL}" x2="${W - padL}" y1="${H - padB}" y2="${H - padB}" stroke="#383835" stroke-width="1"/>
+      <line x1="${padL}" x2="${W - padL}" y1="${H - padB}" y2="${H - padB}" stroke="rgba(124,156,214,0.3)" stroke-width="1"/>
       ${bars}${ticks}
     </svg>
     <details class="table-view"><summary>View as table</summary>

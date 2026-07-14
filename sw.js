@@ -1,5 +1,5 @@
 /* FuturoOS service worker — offline app shell */
-const CACHE = 'fos-v1';
+const CACHE = 'fos-v2';
 const SHELL = [
   './',
   './index.html',
@@ -15,7 +15,11 @@ const SHELL = [
   './vendor/leaflet/images/marker-icon-2x.png',
   './vendor/leaflet/images/marker-shadow.png',
   './vendor/leaflet/images/layers.png',
-  './vendor/leaflet/images/layers-2x.png'
+  './vendor/leaflet/images/layers-2x.png',
+  './icons/mark.svg',
+  // brand chrome (best-effort: install succeeds even if these are unreachable)
+  'https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@700&display=swap',
+  'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css'
 ];
 
 self.addEventListener('install', e => {

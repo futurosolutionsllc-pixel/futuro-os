@@ -38,6 +38,9 @@ It's a static PWA — no build step, no server.
 
 - **Stack:** vanilla JS + Leaflet (vendored in `vendor/leaflet/`, no CDN). `index.html`,
   `styles.css`, `app.js`, `sw.js` (offline shell cache), `manifest.webmanifest`.
+- **Design language:** same system as Futuro OS Solo Edition — navy glass panels,
+  Kelly-green gradient primaries with glow, Jost body + JetBrains Mono micro-labels,
+  Tabler icons, and the soundwave f-clef monogram (`icons/mark.svg`, also the PWA icon).
 - **Storage:** everything in `localStorage` under `fos.*` keys (`fos.jobs`, `fos.settings`,
   `fos.track.<date>` GPS breadcrumbs; legacy `deals` key is kept for pipeline data).
   POD photos are downscaled (≤900px JPEG, max 3/job) to respect the ~5MB quota; use

@@ -3,11 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0b0f1a">
-<title>FuturoOS</title>
+<meta name="theme-color" content="#06080f">
+<title>Futuro OS — Mobile</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@700&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -15,15 +19,15 @@
 
 <header class="appbar">
   <div class="brand">
-    <span class="brand-mark">F</span>
+    <span class="brand-mark" role="img" aria-label="Futuro soundwave f-clef mark"></span>
     <div>
-      <div class="brand-name" id="brandName">FuturoOS</div>
-      <div class="brand-sub" id="brandSub">Operator</div>
+      <div class="brand-name" id="brandName">FUTURO <span class="os">OS_</span></div>
+      <div class="brand-sub" id="brandSub">Mobile Ops</div>
     </div>
   </div>
   <div class="appbar-actions">
     <span id="gpsDot" class="gps-dot off" title="GPS status"></span>
-    <button class="icon-btn" id="btnSettings" aria-label="Settings">⚙</button>
+    <button class="icon-btn" id="btnSettings" aria-label="Settings"><i class="ti ti-settings"></i></button>
   </div>
 </header>
 
@@ -39,8 +43,8 @@
     <div class="card summary-card">
       <div class="summary-grid" id="todaySummary"></div>
       <div class="row gap8">
-        <button class="btn primary grow" id="btnOptimize">⚡ Optimize route</button>
-        <button class="btn grow" id="btnStartDay">▶ Drive</button>
+        <button class="btn primary grow" id="btnOptimize"><i class="ti ti-route"></i> Optimize route</button>
+        <button class="btn grow" id="btnStartDay"><i class="ti ti-steering-wheel"></i> Drive</button>
       </div>
       <div class="hint" id="optimizeStatus"></div>
     </div>
@@ -54,7 +58,7 @@
   <!-- ============ DRIVE (focus mode) ============ -->
   <section id="view-drive" class="view">
     <div id="driveSafety" class="safety-note">
-      🛑 Interact only while stopped. Use voice navigation while moving.
+      <span><i class="ti ti-alert-octagon"></i> Interact only while stopped. Use voice navigation while moving.</span>
       <button class="btn small" id="safetyOk">Got it</button>
     </div>
     <div id="driveContent"></div>
@@ -119,12 +123,12 @@
 
 <!-- ============ BOTTOM NAV ============ -->
 <nav class="tabbar">
-  <button class="tab active" data-view="today"><span class="tab-ico">📋</span>Today</button>
-  <button class="tab" data-view="drive"><span class="tab-ico">🚚</span>Drive</button>
-  <button class="tab" data-view="map"><span class="tab-ico">🗺</span>Map</button>
-  <button class="tab" data-view="jobs"><span class="tab-ico">📦</span>Jobs</button>
-  <button class="tab" data-view="stats"><span class="tab-ico">📈</span>Stats</button>
-  <button class="tab" data-view="biz"><span class="tab-ico">💼</span>Biz</button>
+  <button class="tab active" data-view="today"><i class="ti ti-list-check tab-ico"></i>Today</button>
+  <button class="tab" data-view="drive"><i class="ti ti-steering-wheel tab-ico"></i>Drive</button>
+  <button class="tab" data-view="map"><i class="ti ti-map-2 tab-ico"></i>Map</button>
+  <button class="tab" data-view="jobs"><i class="ti ti-package tab-ico"></i>Jobs</button>
+  <button class="tab" data-view="stats"><i class="ti ti-chart-bar tab-ico"></i>Stats</button>
+  <button class="tab" data-view="biz"><i class="ti ti-building-bank tab-ico"></i>Biz</button>
 </nav>
 
 <!-- ============ JOB EDITOR SHEET ============ -->
@@ -145,7 +149,7 @@
     <label>Address
       <div class="row gap8">
         <input id="jAddress" class="input grow" placeholder="Street, City, ST — or lat,lng">
-        <button class="btn" id="btnGeocode">📍</button>
+        <button class="btn" id="btnGeocode" aria-label="Look up address"><i class="ti ti-map-pin"></i></button>
       </div>
       <div class="hint" id="geoStatus"></div>
     </label>
@@ -176,7 +180,7 @@
     <div id="podJobLine" class="hint"></div>
 
     <div class="pod-block">
-      <div class="pod-label">📷 Photos <span class="hint" id="podPhotoCount"></span></div>
+      <div class="pod-label"><i class="ti ti-camera"></i> Photos <span class="hint" id="podPhotoCount"></span></div>
       <div class="row gap8">
         <label class="btn grow file-btn">Take photo
           <input type="file" id="podPhoto" accept="image/*" capture="environment" hidden>
@@ -186,7 +190,7 @@
     </div>
 
     <div class="pod-block">
-      <div class="pod-label">✍ Signature</div>
+      <div class="pod-label"><i class="ti ti-signature"></i> Signature</div>
       <canvas id="sigPad" width="600" height="200"></canvas>
       <div class="row gap8">
         <button class="btn small" id="sigClear">Clear</button>
@@ -195,7 +199,7 @@
     </div>
 
     <div class="pod-block">
-      <div class="pod-label">▮▯ Barcode <span class="hint" id="podBarcodeReq"></span></div>
+      <div class="pod-label"><i class="ti ti-barcode"></i> Barcode <span class="hint" id="podBarcodeReq"></span></div>
       <div class="row gap8">
         <input id="podBarcodeIn" class="input grow" placeholder="Scan or type code">
         <button class="btn" id="btnScan">Scan</button>
@@ -208,8 +212,8 @@
     <label>Note <input id="podNote" class="input" placeholder="Left at front desk…"></label>
 
     <div class="row gap8">
-      <button class="btn danger grow" id="btnPodFail">✕ Failed</button>
-      <button class="btn success grow" id="btnPodComplete">✓ Complete</button>
+      <button class="btn danger grow" id="btnPodFail"><i class="ti ti-x"></i> Failed</button>
+      <button class="btn success grow" id="btnPodComplete"><i class="ti ti-check"></i> Complete</button>
     </div>
     <div class="hint" id="podStatus"></div>
   </div>
@@ -238,7 +242,7 @@
     <label>Home base address
       <div class="row gap8">
         <input id="sHome" class="input grow" placeholder="Depot / home — or lat,lng">
-        <button class="btn" id="btnGeoHome">📍</button>
+        <button class="btn" id="btnGeoHome" aria-label="Look up home base"><i class="ti ti-map-pin"></i></button>
       </div>
       <div class="hint" id="homeGeoStatus"></div>
     </label>
@@ -260,11 +264,11 @@
     <label>Webhook URL (POST on job completion) <input id="sWebhook" class="input" placeholder="https://…"></label>
     <label>SAM.gov API key <input id="sSamKey" class="input"></label>
     <div class="row gap8">
-      <button class="btn grow" id="btnExport">⬇ Backup JSON</button>
-      <label class="btn grow file-btn">⬆ Restore
+      <button class="btn grow" id="btnExport"><i class="ti ti-download"></i> Backup</button>
+      <label class="btn grow file-btn"><i class="ti ti-upload"></i>&nbsp;Restore
         <input type="file" id="importFile" accept=".json" hidden>
       </label>
-      <button class="btn grow" id="btnCsv">⬇ Jobs CSV</button>
+      <button class="btn grow" id="btnCsv"><i class="ti ti-file-spreadsheet"></i> CSV</button>
     </div>
     <button class="btn primary" id="btnSaveSettings">Save settings</button>
     <div class="hint" id="settingsStatus"></div>

@@ -1,13 +1,13 @@
 {
-  "name": "FuturoOS Operator",
-  "short_name": "FuturoOS",
+  "name": "Futuro OS — Mobile Ops",
+  "short_name": "Futuro OS",
   "description": "Solo owner/operator delivery platform: routes, ETAs, proof of delivery, customer texts, analytics.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0b0f1a",
-  "theme_color": "#0b0f1a",
+  "background_color": "#06080f",
+  "theme_color": "#06080f",
   "icons": [
     { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
