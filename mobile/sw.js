@@ -1,5 +1,5 @@
 /* FuturoOS service worker — offline app shell */
-const CACHE = 'fos-v9';
+const CACHE = 'fos-v10';
 const SHELL = [
   './',
   './index.html',
@@ -41,19 +41,42 @@ self.addEventListener('activate', e => {
   );
 });
 
+// The app's OWN html/js/css are network-first: a cache-first shell strands users
+// on an old build after a deploy (they refresh and still see the stale app), so
+// go to the network when online and fall back to cache offline. Everything else
+// — vendor libs, fonts, map tiles, icons — stays cache-first for speed since it
+// rarely changes.
+const isAppShell = url =>
+  url.origin === self.location.origin &&
+  !url.pathname.includes('/vendor/') &&
+  (/\/$/.test(url.pathname) || /\/(index\.html|app\.js|styles\.css)$/.test(url.pathname));
+
+const cachePut = (req, res) => {
+  const clone = res.clone();
+  caches.open(CACHE).then(c => c.put(req, clone)).catch(() => {});
+};
+
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   // never cache live APIs (routing, geocoding, SAM.gov, Supabase data/auth)
   if (/api\.sam\.gov|router\.project-osrm|nominatim|supabase\.co/.test(url.host)) return;
   if (e.request.method !== 'GET') return;
+
+  if (isAppShell(url)) {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => { if (res.ok) cachePut(e.request, res); return res; })
+        .catch(() => caches.match(e.request).then(hit =>
+          hit || (e.request.mode === 'navigate' ? caches.match('./index.html') : Response.error())))
+    );
+    return;
+  }
+
   e.respondWith(
     caches.match(e.request).then(hit => hit ||
       fetch(e.request).then(res => {
         // cache successful same-origin + tile/CDN responses opportunistically
-        if (res.ok || res.type === 'opaque') {
-          const clone = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone)).catch(() => {});
-        }
+        if (res.ok || res.type === 'opaque') cachePut(e.request, res);
         return res;
       }).catch(() => e.request.mode === 'navigate'
         ? caches.match('./index.html')

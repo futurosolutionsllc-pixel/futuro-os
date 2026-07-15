@@ -1647,6 +1647,8 @@ function wire() {
   $('btnSignup').addEventListener('click', () => doAuth(true));
   $('authPass').addEventListener('keydown', e => { if (e.key === 'Enter') doAuth(false); });
   // Settings
+  // (btnDesktop is a plain <a href="../"> in the app bar — no JS, so it still
+  //  works even if this script is served stale from cache.)
   $('btnSettings').addEventListener('click', () => { loadSettingsForm(); $('settingsSheet').hidden = false; });
   $('btnSaveSettings').addEventListener('click', () => saveSettingsForm());
   // App lock
