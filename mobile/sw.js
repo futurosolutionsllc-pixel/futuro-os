@@ -1,5 +1,5 @@
 /* FuturoOS service worker — offline app shell */
-const CACHE = 'fos-v8';
+const CACHE = 'fos-v9';
 const SHELL = [
   './',
   './index.html',
