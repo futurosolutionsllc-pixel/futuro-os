@@ -604,6 +604,7 @@ async function saveJob() {
     if (window._pendingDeal) j.sourceDealId = window._pendingDeal;
   }
   saveJobs();
+  syncCalendar(j);
   $('jobSheet').hidden = true;
   toast(isNew ? 'Job added' : 'Job saved');
   render();
@@ -1408,6 +1409,17 @@ async function deleteJobRow(id) {
   if (!supa || !cloudUser) return;
   try { await supa.from('jobs').delete().eq('id', id).eq('owner', cloudUser.id); } catch (e) {}
 }
+// Mirror a delivery window to Google Calendar (best-effort; dormant until the
+// Google Apps Script bridge + secrets are set — see integrations/google-apps-script).
+async function syncCalendar(j, remove) {
+  if (!supa || !cloudUser || (!j || (!j.date && !remove))) return;
+  try {
+    await supa.functions.invoke('sync-calendar', {body: {
+      id: j.id, customer: j.customer, address: j.address,
+      job_date: j.date, win_s: j.winS, win_e: j.winE, type: j.type, remove: !!remove
+    }});
+  } catch (e) {}
+}
 function queueJobSync() {
   if (_cloudApplying) return;
   if (!supa || !cloudUser) return;
@@ -1590,8 +1602,9 @@ function wire() {
   $('btnDeleteJob').addEventListener('click', () => {
     if (!confirm('Delete this job?')) return;
     const delId = S.editingId;
+    const delJob = S.jobs.find(j => j.id === delId);
     S.jobs = S.jobs.filter(j => j.id !== delId);
-    saveJobs(); deleteJobRow(delId); $('jobSheet').hidden = true; render();
+    saveJobs(); deleteJobRow(delId); if (delJob) syncCalendar(delJob, true); $('jobSheet').hidden = true; render();
   });
   // POD
   $('podPhoto').addEventListener('change', e => { if (e.target.files[0]) addPodPhoto(e.target.files[0]); e.target.value = ''; });

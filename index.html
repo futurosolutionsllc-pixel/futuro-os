@@ -1584,15 +1584,23 @@ async function saveDelivery(id,fields){
   const i=DELIV.findIndex(x=>x.id===row.id);   // optimistic local update
   if(i>=0) DELIV[i]=Object.assign({},DELIV[i],row); else DELIV.unshift(row);
   if(page==='deliveries') rDeliveries(); rNav();
-  try{ const {error}=await window.ffSupa.from('jobs').upsert([row],{onConflict:'id'}); if(error) throw error; _toast('Delivery saved'); }
+  try{ const {error}=await window.ffSupa.from('jobs').upsert([row],{onConflict:'id'}); if(error) throw error; _toast('Delivery saved'); syncDeliveryCalendar(row); }
   catch(e){ _toast('Save failed — check connection'); console.warn('saveDelivery',e.message); }
 }
 async function delDelivery(id){
   if(!confirm('Delete this delivery? It will be removed from the mobile app too.')) return;
+  const row=DELIV.find(x=>x.id===id);
   DELIV=DELIV.filter(x=>x.id!==id);
   if(page==='deliveries') rDeliveries(); rNav();
-  try{ await window.ffSupa.from('jobs').delete().eq('id',id); _toast('Delivery deleted'); }
+  try{ await window.ffSupa.from('jobs').delete().eq('id',id); _toast('Delivery deleted'); syncDeliveryCalendar(row||{id},true); }
   catch(e){ console.warn('delDelivery',e.message); }
+}
+// Mirror a delivery window to Google Calendar (best-effort; dormant until the
+// Google Apps Script bridge + secrets are set).
+async function syncDeliveryCalendar(row,remove){
+  if(!window.ffSupa||!window.FF_USER||!row||(!row.job_date&&!remove)) return;
+  try{ await window.ffSupa.functions.invoke('sync-calendar',{body:{ id:row.id, customer:row.customer, address:row.address, job_date:row.job_date, win_s:row.win_s, win_e:row.win_e, type:row.type, remove:!!remove }}); }
+  catch(e){}
 }
 
 // ============================================================
