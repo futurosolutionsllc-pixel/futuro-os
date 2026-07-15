@@ -1685,6 +1685,18 @@ startGps();
 initCloud();
 updateInstallUi();
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  // When a NEW service worker takes control (sw.js does skipWaiting + claim),
+  // reload once so the user lands on the fresh build instead of having to close
+  // and reopen the app. Guarded on there having been a previous controller, so
+  // the very first install doesn't trigger a pointless reload, and on a flag so
+  // it can't loop.
+  const _hadController = !!navigator.serviceWorker.controller;
+  let _swRefreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!_hadController || _swRefreshing) return;
+    _swRefreshing = true;
+    location.reload();
+  });
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 // expose a couple of handlers used from generated HTML
