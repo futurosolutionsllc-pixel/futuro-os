@@ -1182,6 +1182,9 @@ const _fInput='width:100%;background:var(--bg4,rgba(255,255,255,.04));border:1px
 function fText(id,label,ph=''){return `<label for="${id}" style="${_fLabel}">${label}</label><input id="${id}" type="text" placeholder="${ph}" style="${_fInput}">`;}
 function fNum(id,label,ph=''){return `<label for="${id}" style="${_fLabel}">${label}</label><input id="${id}" type="number" placeholder="${ph}" style="${_fInput}">`;}
 function fEmail(id,label){return `<label for="${id}" style="${_fLabel}">${label}</label><input id="${id}" type="email" style="${_fInput}">`;}
+// Native pickers — guarantee ISO values (YYYY-MM-DD / HH:MM) downstream (Calendar sync parses these).
+function fDate(id,label){return `<label for="${id}" style="${_fLabel}">${label}</label><input id="${id}" type="date" style="${_fInput}">`;}
+function fTime(id,label){return `<label for="${id}" style="${_fLabel}">${label}</label><input id="${id}" type="time" style="${_fInput}">`;}
 function fTextarea(id,label,ph=''){return `<label for="${id}" style="${_fLabel}">${label}</label><textarea id="${id}" rows="3" placeholder="${ph}" style="${_fInput};resize:vertical"></textarea>`;}
 function fSelect(id,label,opts){return `<label for="${id}" style="${_fLabel}">${label}</label><select id="${id}" style="${_fInput};cursor:pointer">${opts.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('')}</select>`;}
 function fRow(a,b){return `<div style="display:flex;gap:12px"><div style="flex:1">${a}</div><div style="flex:1">${b}</div></div>`;}
@@ -1554,8 +1557,8 @@ function deliveryForm(id){
     fText('dl_cust','Customer','Jane Smith')+
     fRow(fText('dl_phone','Phone'),fEmail('dl_email','Email (for receipt)'))+
     fText('dl_addr','Address','Street, City, ST')+
-    fRow(fText('dl_date','Date','YYYY-MM-DD'),fSelect('dl_type','Type',[['delivery','Delivery'],['pickup','Pickup']]))+
-    fRow(fText('dl_ws','Window from','09:00'),fText('dl_we','Window to','17:00'))+
+    fRow(fDate('dl_date','Date'),fSelect('dl_type','Type',[['delivery','Delivery'],['pickup','Pickup']]))+
+    fRow(fTime('dl_ws','Window from'),fTime('dl_we','Window to'))+
     fRow(fNum('dl_rate','Rate ($)'),fSelect('dl_status','Status',[['pending','Pending'],['enroute','En route'],['arrived','Arrived'],['done','Delivered'],['failed','Failed']]))+
     fRow(fSelect('dl_secured','Secured (verify ID)',[['no','No'],['yes','Yes']]),fNum('dl_minage','Min age (optional)'))+
     fTextarea('dl_notes','Notes');
