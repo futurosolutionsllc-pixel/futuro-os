@@ -31,8 +31,86 @@ Both apps sign into the same Supabase project with the same email/password accou
 Each app persists to its own one-row-per-user table so they can never overwrite each
 other: desktop → `snapshot`, mobile → `mobile_snapshot` (owner-scoped RLS on both).
 The mobile app works fully offline/logged-out; signing in (Settings → Cloud sync) adds
-debounced cloud backup and carries your jobs across devices. Last writer wins by
-`savedAt` timestamp on load.
+debounced cloud backup and carries your jobs across devices.
+
+### Desktop storage and sync rules
+
+**Local cache is per account.** The desktop cache key is `futurofreight_v1:<user-id>`,
+derived from the authenticated Supabase user ID and resolved at the moment of each read
+or write. Nothing is read from or written to local storage until authentication has
+resolved, so one account can never load or overwrite another's cache — even in the same
+browser.
+
+**Cloud load has three distinct outcomes**, and an error is never mistaken for "no data":
+
+| Outcome | Meaning | What the app does |
+|---|---|---|
+| `CLOUD_ROW_LOADED` | A valid snapshot came back | Compare it against the local cache and load the newer one |
+| `CLOUD_ROW_ABSENT` | Positively confirmed: no row for this account | Load local if present, otherwise start a new account and create the first cloud row **once** |
+| `CLOUD_LOAD_ERROR` | Request failed, or the cloud snapshot is malformed | **Block all cloud writes.** Never initialize, never upsert |
+
+**The `savedAt` conflict rule.** `savedAt` is a millisecond timestamp written into every
+snapshot. On load, the valid cloud and local timestamps are compared and the **newer one
+wins** — so work done offline is never overwritten by an older cloud copy. A snapshot with
+a missing or invalid timestamp is treated as older than any validly timestamped one and
+can never defeat it. **Exact ties go to the cloud**, deterministically: the local cache is
+written from the cloud on load, so equal timestamps almost always mean identical content,
+and preferring the cloud keeps multiple devices converging.
+
+**Offline / local-only.** If the cloud can't be verified but a valid local cache exists,
+the app loads it and keeps working — edits still save locally, the save chip reads
+*"Cloud unavailable · working locally"*, and cloud writes stay blocked until a successful
+retry. If the cloud can't be verified **and** there's no local cache, editing is paused
+rather than showing you an empty app that looks like a new account: nothing has been lost,
+and a Retry button re-checks. The sidebar and sign-out stay available throughout.
+
+**Logout keeps your offline data.** Signing out normally cancels any pending save, clears
+the in-memory CRM, and signs out of Supabase — but **keeps** this account's local cache, so
+unsynced work survives and reappears at the next sign-in. To remove it deliberately, use
+**Settings → Sign out and remove offline data**, which warns first and only ever removes the
+signed-in account's own cache.
+
+**Recovering data from an older version.** Versions before per-account caching stored data
+under a single shared `futurofreight_v1` key. That key is never read automatically, never
+deleted, and never uploaded.
+
+If you sign in with no cloud row and no cache for your account, a notice offers to import
+earlier browser data, and the same action appears at **Settings → Recover earlier browser
+data**.
+
+Recovery is offered only when the account has no data of its own and its cloud record was
+positively confirmed empty. Outside that state, the recovery action is unavailable, because
+importing would replace current account data.
+
+The app *cannot* prove that the earlier browser data belongs to the account currently signed
+in. Import therefore requires an explicit warning and confirmation, may synchronize the
+imported data to that account's cloud record, and leaves the original legacy browser copy
+unchanged.
+
+If your local cache ever becomes unreadable, the raw value is preserved byte-for-byte under
+`futurofreight_v1:recovery:<user-id>:<timestamp>` (up to 3 copies per account) rather than
+being deleted, and the app carries on from the cloud copy.
+
+### Tests
+
+The regression harness for the rules above lives **outside this repository**, at
+`../FuturoFreight_Test_Harnesses/p0a-harness.html`. It is kept out of the repo on purpose:
+this repo is deployed as a static site straight from its root, so anything committed here
+is published, and a test page has no business being served in production.
+
+To run it, serve the **parent** directory (so the harness and the app share one origin) and
+open the harness:
+
+```
+cd ..                       # the directory holding FuturoFreight/ and FuturoFreight_Test_Harnesses/
+python3 -m http.server 8000
+# → http://localhost:8000/FuturoFreight_Test_Harnesses/p0a-harness.html
+```
+
+It drives the real `index.html` in an iframe against a mocked Supabase client — `createClient`
+is replaced before the app's inline script runs, so no request to a live project is ever
+constructed. It refuses to run anywhere but localhost, and backs up and restores any existing
+`futurofreight_v1` key so a real cache is never disturbed.
 
 # Futuro OS — Mobile Ops (`/mobile/`)
 

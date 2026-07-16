@@ -582,11 +582,53 @@ function ffAuthErr(m){const e=document.getElementById('ff-auth-err');e.style.dis
 function ffAuthMsg(m){const e=document.getElementById('ff-auth-msg');e.style.display='block';e.textContent=m;}
 function ffClearMsgs(){document.getElementById('ff-auth-err').style.display='none';document.getElementById('ff-auth-msg').style.display='none';}
 
-async function ffBootCRM(){
-  // hide the login overlay, then run the app's existing init (defined far below)
-  document.getElementById('ff-auth').style.display='none';
-  if (typeof window.__ffInit === 'function') window.__ffInit();
+/* ---------- bootstrap handshake ----------
+   This auth block and the application initializer (defined in the script block
+   below) become ready in an order that is NOT guaranteed. If getSession() ever
+   resolves synchronously — or within the first microtask — this block runs to
+   completion before the next <script> has parsed, so window.__ffInit does not
+   exist yet and initialization is silently skipped: signed in, but never loaded.
+   It only works today because the real supabase-js getSession() happens to take
+   a macrotask. That is a timing accident, not a guarantee.
+
+   Both sides now report readiness to one coordinator, which starts initialization
+   exactly once, when both are present, in either order, with no timing assumption. */
+window.__ffBoot = { authResolved:false, user:null, init:null, started:false, epoch:0 };
+
+function __ffBootTry(){
+  const B = window.__ffBoot;
+  if (B.started) return;                    // exactly once per authenticated bootstrap
+  if (!B.authResolved || !B.init) return;   // the other side isn't ready yet
+  if (!B.user) return;                      // resolved, but no session: login stays up
+  B.started = true;
+  const bootEpoch = B.epoch;
+  FF_USER = B.user; window.FF_USER = B.user;
+  const ov = document.getElementById('ff-auth');
+  if (ov) ov.style.display = 'none';
+  try {
+    const p = B.init(bootEpoch);
+    if (p && typeof p.catch === 'function') p.catch(e => console.warn('Futuro OS init failed:', e && e.message));
+  } catch(e) { console.warn('Futuro OS init failed:', e && e.message); }
 }
+
+// Auth side. user === null means "auth resolved, but there is no session".
+window.__ffAuthResolved = function(user){
+  const B = window.__ffBoot;
+  B.authResolved = true;
+  B.user = user || null;
+  __ffBootTry();
+};
+// App side. Called once the application script has defined its initializer.
+window.__ffRegisterInit = function(fn){
+  window.__ffBoot.init = fn;
+  __ffBootTry();
+};
+// Sign-out side. Invalidates any pending or in-flight bootstrap: the epoch bump
+// makes a late initializer from the previous session abandon its own result.
+window.__ffBootInvalidate = function(){
+  const B = window.__ffBoot;
+  B.epoch++; B.started = false; B.authResolved = false; B.user = null;
+};
 
 document.getElementById('ff-login-btn').addEventListener('click', async ()=>{
   ffClearMsgs();
@@ -595,8 +637,7 @@ document.getElementById('ff-login-btn').addEventListener('click', async ()=>{
   if(!email||!pass){ffAuthErr('Enter email and password.');return;}
   const {data,error}=await ffSupa.auth.signInWithPassword({email,password:pass});
   if(error){ffAuthErr(error.message);return;}
-  FF_USER=data.user; window.FF_USER=FF_USER;
-  ffBootCRM();
+  window.__ffAuthResolved(data.user);
 });
 
 document.getElementById('ff-signup-btn').addEventListener('click', async ()=>{
@@ -606,21 +647,45 @@ document.getElementById('ff-signup-btn').addEventListener('click', async ()=>{
   if(!email||!pass){ffAuthErr('Enter an email and a password (min 6 chars) to create your account.');return;}
   const {data,error}=await ffSupa.auth.signUp({email,password:pass});
   if(error){ffAuthErr(error.message);return;}
-  if(data.session){ FF_USER=data.user; window.FF_USER=FF_USER; ffBootCRM(); }
+  if(data.session){ window.__ffAuthResolved(data.user); }
   else { ffAuthMsg('Account created. If email confirmation is on, check your inbox, then Sign In.'); }
 });
 
 // allow Enter key to submit
 ['ff-email','ff-pass'].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('ff-login-btn').click();}));
 
-// On load: if already logged in (returning session), skip straight to CRM
+// On load: report the session result to the coordinator. Correctness does not
+// depend on WHEN this resolves — synchronously, in a microtask, or after a
+// network round-trip all behave identically.
 (async ()=>{
-  const {data}=await ffSupa.auth.getSession();
-  if(data && data.session){ FF_USER=data.session.user; window.FF_USER=FF_USER; ffBootCRM(); }
+  try {
+    const {data}=await ffSupa.auth.getSession();
+    window.__ffAuthResolved(data && data.session ? data.session.user : null);
+  } catch(e) {
+    window.__ffAuthResolved(null);   // no session → login overlay stays usable
+  }
 })();
 
+// Ordinary sign-out PRESERVES this account's offline cache so unsynced work can be
+// recovered on the next sign-in. Teardown runs first: it bumps the auth epoch and
+// cancels the pending debounced save, so nothing can write during signOut().
 window.ffLogout = async function(){
-  await ffSupa.auth.signOut();
+  if (typeof window.__ffTeardown === 'function') window.__ffTeardown({ removeScoped:false });
+  try { await ffSupa.auth.signOut(); } catch(e) { console.warn('Sign-out error:', e.message); }
+  location.reload();
+};
+
+// Explicit, separate action: sign out AND drop this account's offline cache.
+// Removes only the signed-in user's scoped key — never another account's key,
+// never the legacy unscoped key, never a recovery key, never mobile's fos.* keys.
+window.ffLogoutForget = async function(){
+  const dirty = typeof window.__ffHasDirty === 'function' && window.__ffHasDirty();
+  const warn = dirty
+    ? 'Sign out and remove this account\'s offline data from this browser?\n\nYou have changes that have NOT been synced to the cloud. Those changes will be lost permanently.\n\nYour cloud data and any exported backups are not affected.'
+    : 'Sign out and remove this account\'s offline data from this browser?\n\nAny local changes not yet synced to the cloud will be lost.\n\nYour cloud data and any exported backups are not affected.';
+  if (!confirm(warn)) return;
+  if (typeof window.__ffTeardown === 'function') window.__ffTeardown({ removeScoped:true });
+  try { await ffSupa.auth.signOut(); } catch(e) { console.warn('Sign-out error:', e.message); }
   location.reload();
 };
 </script>
@@ -655,6 +720,9 @@ window.ffLogout = async function(){
     </div>
   </header>
   <div id="page-help"></div>
+  <!-- Persistent host for cloud-state + recovery notices. Kept separate from
+       #page-help, which go() rewrites on every navigation. -->
+  <div id="ff-notices"></div>
   <main class="content" id="content" tabindex="-1"></main>
 </div>
 </div>
@@ -856,11 +924,182 @@ let settingsEditing=false;
 // Saves full CRM state as one JSON row per user in the "snapshot"
 // table. Keeps a localStorage mirror as an offline safety net.
 // ============================================================
-const LS_KEY = 'futurofreight_v1';
+// Local cache is keyed per authenticated user: `futurofreight_v1:<uid>`. The bare
+// `futurofreight_v1` key is the pre-P0-A unscoped cache — it is preserved, never
+// read as a normal source, and only ever imported on explicit owner confirmation.
+const LS_PREFIX = 'futurofreight_v1';
+const LS_LEGACY = 'futurofreight_v1';
+const LS_RECOVERY_MAX = 3;   // preserved copies of an unreadable scoped cache, per user
 let _lastSavedAt = null;
 let _saveTimer = null;
 let _saveInFlight = false;
 let _savePending = false;
+
+// --- account isolation + cloud-write gating ---
+let _authEpoch = 0;          // bumped on sign-out; invalidates in-flight async work
+let _cloudWritable = false;  // no cloud write until a load outcome authorizes one
+let _initSaveDone = false;   // the first cloud row may only ever be created once
+let _dirty = false;          // local changes not yet confirmed in the cloud
+let _crmLocked = false;      // cloud unverifiable and no local data → read-only CRM
+
+const LOAD_STATE = {
+  LOADED: 'CLOUD_ROW_LOADED',
+  ABSENT: 'CLOUD_ROW_ABSENT',
+  ERROR:  'CLOUD_LOAD_ERROR'
+};
+
+// Resolved at call time, never cached: a stale closure must not be able to write
+// one account's state under another account's key. Null means refuse all I/O.
+function _lsKey(uid) {
+  const id = uid || (window.FF_USER && window.FF_USER.id);
+  return id ? LS_PREFIX + ':' + id : null;
+}
+
+// Capture identity + epoch before an await; re-check with _authOk before acting on
+// the result. Note the snapshot itself carries no owner field — ownership lives on
+// the database row — so identity must be tracked here, not read back out of state.
+function _authCap() {
+  return { uid: (window.FF_USER && window.FF_USER.id) || null, epoch: _authEpoch };
+}
+function _authOk(cap) {
+  const uid = window.FF_USER && window.FF_USER.id;
+  return !!(cap && cap.uid && uid && cap.epoch === _authEpoch && cap.uid === uid);
+}
+
+// savedAt is integer milliseconds since the epoch, as written by _collectState().
+// One day of future skew is tolerated; anything beyond that is a broken clock.
+function _validSavedAt(n) {
+  return typeof n === 'number' && Number.isFinite(n) && n > 0 && n <= Date.now() + 86400000;
+}
+
+// Minimum structural contract. _applyState() dereferences S, T and CA unguarded,
+// so a snapshot missing any of them would throw — validating all three is the
+// least we can assume, and every snapshot this app has ever written has them.
+function _validSnapshot(d) {
+  return !!d && typeof d === 'object' &&
+         Array.isArray(d.S) && Array.isArray(d.T) && Array.isArray(d.CA);
+}
+
+// An unreadable scoped cache is preserved byte-for-byte, never repaired, never
+// shown, never uploaded. At the cap we stop creating copies rather than prune.
+function _preserveCorruptLocal(uid, raw) {
+  try {
+    if (typeof raw !== 'string' || !raw) return 'skipped';
+    const pfx = LS_PREFIX + ':recovery:' + uid + ':';
+    let n = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf(pfx) === 0) n++;
+    }
+    if (n >= LS_RECOVERY_MAX) return 'at-cap';
+    const key = pfx + Date.now();
+    if (localStorage.getItem(key) !== null) return 'collision';  // never overwrite
+    localStorage.setItem(key, raw);
+    return 'preserved';
+  } catch (e) {
+    return 'failed';   // out of quota: abandon preservation rather than destroy it
+  }
+}
+
+// {state:'OK'|'ABSENT'|'CORRUPT'}. CORRUPT never deletes or rewrites the raw value.
+function _readScopedLocal(uid) {
+  const key = _lsKey(uid);
+  if (!key) return { state: 'ABSENT' };
+  let raw = null;
+  try { raw = localStorage.getItem(key); } catch (e) { return { state: 'ABSENT' }; }
+  if (raw === null) return { state: 'ABSENT' };
+  let data = null;
+  try { data = JSON.parse(raw); }
+  catch (e) { return { state: 'CORRUPT', preserve: _preserveCorruptLocal(uid, raw) }; }
+  if (!_validSnapshot(data)) return { state: 'CORRUPT', preserve: _preserveCorruptLocal(uid, raw) };
+  return { state: 'OK', data };
+}
+
+function _writeScopedLocal(data, uid) {
+  const key = _lsKey(uid);
+  if (!key) return false;
+  try { localStorage.setItem(key, JSON.stringify(data)); return true; }
+  catch (e) { return false; }
+}
+
+// Presence only — never reads the legacy VALUE, so deciding whether to offer
+// recovery can never involve inspecting or parsing the legacy data.
+function _legacyKeyPresent() {
+  try {
+    for (let i = 0; i < localStorage.length; i++) if (localStorage.key(i) === LS_LEGACY) return true;
+    return false;
+  } catch (e) { return false; }
+}
+
+// Does the current user's scoped cache hold actual records? Side-effect free —
+// deliberately NOT _readScopedLocal(), which would create a recovery copy every
+// time this is called from a render path.
+function _scopedSnapshotHasContent(uid) {
+  const key = _lsKey(uid);
+  if (!key) return false;
+  let raw = null;
+  try { raw = localStorage.getItem(key); } catch (e) { return false; }
+  if (raw === null) return false;
+  try {
+    const d = JSON.parse(raw);
+    if (!_validSnapshot(d)) return false;
+    return (d.S.length + d.T.length + d.CA.length + ((d.JOBS && d.JOBS.length) || 0)) > 0;
+  } catch (e) { return false; }
+}
+
+// Is the in-memory CRM still an untouched new account?
+function _crmIsEmpty() {
+  try {
+    return S.length === 0 && T.length === 0 && CA.length === 0 && JOBS.length === 0 &&
+           GC_OPPS.length === 0 && GC_CONTRACTS.length === 0 && GC_PROP.length === 0;
+  } catch (e) { return false; }
+}
+
+/* ---------- centralized legacy-recovery eligibility ----------
+   ONE check, used by the banner, the Settings action, and importLegacyCache
+   itself, so those three can never disagree. Recovery is not merely warned
+   about outside the approved state — it is unavailable.
+
+   _recoveryState is set ONLY where the approved state is positively established
+   (a confirmed CLOUD_ROW_ABSENT with no valid scoped snapshot). Cloud absence is
+   never inferred from "no data is visible".
+
+   Note on requirement 5: "no valid scoped snapshot exists" is recorded at load
+   time rather than re-derived live, because new-user init writes a scoped
+   snapshot moments later — a live reading would make recovery permanently
+   ineligible in the one case it exists for. The live guard for "this account has
+   nothing to lose" is _crmIsEmpty() + _scopedSnapshotHasContent(). */
+let _recoveryState = null;     // {uid, epoch, cloudAbsent, scopedAbsentAtLoad} | null
+let _recoveryImporting = false;
+let _logoutInProgress = false;
+
+function _recoveryEligibleCore(ignoreImporting) {
+  if (!ignoreImporting && _recoveryImporting) return false;            // (9)
+  if (_logoutInProgress) return false;                                 // (10)
+  const B = window.__ffBoot;
+  if (!B || !B.authResolved || !B.started) return false;               // (1)
+  const uid = window.FF_USER && window.FF_USER.id;
+  if (!uid) return false;                                              // (2)
+  const R = _recoveryState;
+  if (!R) return false;                                                // (4)(8)
+  if (!R.cloudAbsent || !R.scopedAbsentAtLoad) return false;           // (4)(5)
+  if (R.uid !== uid) return false;                                     // (2)
+  if (R.epoch !== _authEpoch) return false;                            // (3)
+  if (!_cloudWritable) return false;                                   // (8)
+  if (_crmLocked) return false;                                        // (8)
+  if (!_crmIsEmpty()) return false;                                    // (7)
+  if (_scopedSnapshotHasContent(uid)) return false;                    // (5)
+  if (!_legacyKeyPresent()) return false;                              // (6)
+  return true;
+}
+function _recoveryEligible() { return _recoveryEligibleCore(false); }
+
+// Show or remove the banner strictly according to eligibility.
+function _syncRecoveryUi() {
+  if (_recoveryEligible()) { _showLegacyRecovery(); return; }
+  const b = document.getElementById('ff-legacy-banner');
+  if (b) b.remove();
+}
 
 // ===== GOVCON STATE (schema v3 — every key optional; older v2 saves load untouched) =====
 let GC_OPPS=[], GC_PROP=[], GC_AWARDS=[], GC_CONTRACTS=[], GC_TOS=[], GC_PERF=[];
@@ -939,77 +1178,350 @@ function _applyState(data) {
   return true;
 }
 
-// Actual network write to Supabase (one row per user, upserted)
+// Actual network write to Supabase (one row per user, upserted).
+// Every precondition here is load-bearing: a write is only ever allowed for a
+// still-signed-in user whose cloud state we have positively verified.
 async function _pushToCloud() {
+  const cap = _authCap();
+  if (!_authOk(cap)) { _savePending = false; return; }   // no user, or signed out
+  if (!_cloudWritable) { _dirty = true; _setSaveChip('sync-unavailable'); return; }
   if (_saveInFlight) { _savePending = true; return; }
   _saveInFlight = true;
   const data = _collectState();
-  // local mirror first (instant safety net / offline)
-  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch(e){}
+  if (!_validSnapshot(data)) { _saveInFlight = false; return; }
+  _writeScopedLocal(data, cap.uid);   // scoped local mirror first (offline safety net)
   try {
-    const uid = window.FF_USER && window.FF_USER.id;
-    if (uid && window.ffSupa) {
-      const { error } = await window.ffSupa
-        .from('snapshot')
-        .upsert({ owner: uid, data, updated_at: new Date().toISOString() }, { onConflict: 'owner' });
-      if (error) { console.warn('Cloud save error:', error.message); _setSaveBadge('local'); }
-      else { _lastSavedAt = new Date(); _setSaveBadge('cloud'); }
-    }
+    // supabase-js RESOLVES with {error} on RLS/4xx rather than throwing, so the
+    // error object must be inspected explicitly — catch alone would miss it.
+    const { error } = await window.ffSupa
+      .from('snapshot')
+      .upsert({ owner: cap.uid, data, updated_at: new Date().toISOString() }, { onConflict: 'owner' });
+    if (!_authOk(cap)) return;   // signed out while the write was in flight
+    if (error) { console.warn('Cloud save error:', error.message); _dirty = true; _setSaveBadge('local'); }
+    else { _dirty = false; _initSaveDone = true; _lastSavedAt = new Date(); _setSaveBadge('cloud'); }
   } catch(e) {
-    console.warn('Futuro OS cloud save failed:', e.message); _setSaveBadge('local');
+    if (_authOk(cap)) { console.warn('Futuro OS cloud save failed:', e.message); _dirty = true; _setSaveBadge('local'); }
   } finally {
     _saveInFlight = false;
-    if (_savePending) { _savePending = false; _pushToCloud(); }
+    if (_savePending) {
+      _savePending = false;
+      if (_authOk(cap) && _cloudWritable) _pushToCloud();
+    }
   }
 }
 
-// Public saveAll() — same name/signature the whole app uses.
-// Debounced so rapid edits batch into one network write.
+// Public saveAll() — same name/signature the whole app uses (82 call sites).
+// Local saves under the scoped key always proceed; only the cloud write is gated.
 function saveAll() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(_collectState())); } catch(e){}
+  const cap = _authCap();
+  if (!cap.uid) return;      // never touch storage before authentication resolves
+  if (_crmLocked) return;    // account unverified: nothing here is safe to persist
+  _writeScopedLocal(_collectState(), cap.uid);
+  _dirty = true;
   clearTimeout(_saveTimer);
+  if (!_cloudWritable) { _setSaveChip('sync-unavailable'); return; }
   _saveTimer = setTimeout(_pushToCloud, 600);
 }
 
-// Async load: try Supabase first, fall back to localStorage mirror.
-async function loadAll() {
+// Async load. Returns one of three DISTINCT states — an error is never reported
+// as an absent row, because "no data" authorizes writes and "load failed" must not.
+//   { state, source?, reason?, localCorrupt?, preserve? }
+async function loadSnapshot() {
+  const cap = _authCap();
+  if (!cap.uid || !window.ffSupa) return { state: LOAD_STATE.ERROR, reason: 'no-auth', source: 'none' };
+
+  let row = null, err = null;
   try {
-    const uid = window.FF_USER && window.FF_USER.id;
-    if (uid && window.ffSupa) {
-      const { data: row, error } = await window.ffSupa
-        .from('snapshot').select('data').eq('owner', uid)
-        .order('updated_at', { ascending: false }).limit(1).maybeSingle();
-      if (!error && row && row.data && row.data.S) {
-        _applyState(row.data);
-        _lastSavedAt = row.data.savedAt ? new Date(row.data.savedAt) : new Date();
-        try { localStorage.setItem(LS_KEY, JSON.stringify(row.data)); } catch(e){}
-        return true;
-      }
+    const res = await window.ffSupa
+      .from('snapshot').select('data').eq('owner', cap.uid)
+      .order('updated_at', { ascending: false }).limit(1).maybeSingle();
+    row = res.data; err = res.error;   // explicit error-object inspection
+  } catch (e) { err = e; }
+
+  if (!_authOk(cap)) return { state: LOAD_STATE.ERROR, reason: 'auth-changed', source: 'none' };
+
+  const local = _readScopedLocal(cap.uid);
+  const corrupt = local.state === 'CORRUPT';
+
+  // --- CLOUD_LOAD_ERROR: transport failure or a resolved error object ---
+  if (err) {
+    console.warn('Cloud load failed:', err.message || err);
+    if (local.state === 'OK') {
+      _applyState(local.data);
+      _lastSavedAt = _validSavedAt(local.data.savedAt) ? new Date(local.data.savedAt) : null;
+      return { state: LOAD_STATE.ERROR, reason: 'cloud-error', source: 'local', localCorrupt: corrupt, preserve: local.preserve };
     }
-  } catch(e) { console.warn('Cloud load failed, trying local:', e.message); }
-  // fallback: localStorage mirror
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return false;
-    const data = JSON.parse(raw);
-    const ok = _applyState(data);
-    if (ok && data.savedAt) _lastSavedAt = new Date(data.savedAt);
-    return ok;
-  } catch(e) {
-    console.warn('Futuro OS load failed:', e.message);
-    return false;
+    return { state: LOAD_STATE.ERROR, reason: 'cloud-error', source: 'none', localCorrupt: corrupt, preserve: local.preserve };
   }
+
+  // --- CLOUD_ROW_ABSENT: positively confirmed, no row for this owner ---
+  if (!row || !row.data) {
+    if (local.state === 'OK') {
+      _applyState(local.data);
+      _lastSavedAt = _validSavedAt(local.data.savedAt) ? new Date(local.data.savedAt) : null;
+      return { state: LOAD_STATE.ABSENT, source: 'local', localCorrupt: corrupt, preserve: local.preserve };
+    }
+    return { state: LOAD_STATE.ABSENT, source: 'new', localCorrupt: corrupt, preserve: local.preserve };
+  }
+
+  // A row exists but is malformed: that is an integrity error, NOT a new user.
+  // Treating it as new-user is what allowed an empty snapshot to overwrite it.
+  if (!_validSnapshot(row.data)) {
+    if (local.state === 'OK') {
+      _applyState(local.data);
+      _lastSavedAt = _validSavedAt(local.data.savedAt) ? new Date(local.data.savedAt) : null;
+      return { state: LOAD_STATE.ERROR, reason: 'cloud-invalid', source: 'local', localCorrupt: corrupt, preserve: local.preserve };
+    }
+    return { state: LOAD_STATE.ERROR, reason: 'cloud-invalid', source: 'none', localCorrupt: corrupt, preserve: local.preserve };
+  }
+
+  // --- CLOUD_ROW_LOADED: both sides valid → newer savedAt wins ---
+  const cAt = _validSavedAt(row.data.savedAt) ? row.data.savedAt : null;
+  const lAt = (local.state === 'OK' && _validSavedAt(local.data.savedAt)) ? local.data.savedAt : null;
+
+  let winner = row.data, source = 'cloud';
+  if (local.state === 'OK') {
+    // A snapshot with no usable timestamp never defeats one that has a valid one.
+    // Cloud wins exact ties and wins when neither side is validly timestamped:
+    // the local mirror is written from the cloud on load, so equal almost always
+    // means identical, and preferring cloud converges across devices.
+    if (lAt !== null && cAt === null) { winner = local.data; source = 'local'; }
+    else if (lAt !== null && cAt !== null && lAt > cAt) { winner = local.data; source = 'local'; }
+  }
+
+  if (!_authOk(cap)) return { state: LOAD_STATE.ERROR, reason: 'auth-changed', source: 'none' };
+  _applyState(winner);
+  _lastSavedAt = _validSavedAt(winner.savedAt) ? new Date(winner.savedAt) : null;
+  _writeScopedLocal(winner, cap.uid);
+  return { state: LOAD_STATE.LOADED, source, localCorrupt: corrupt, preserve: local.preserve };
 }
 
 async function clearSave() {
   if (!confirm('Reset ALL data (cloud + this browser) back to defaults?\n\nThis permanently deletes every job, client, document record, and setting. Export a backup first (Settings & Backup).')) return;
   if (!confirm('Last check: this cannot be undone. Really erase everything?')) return;
+  const cap = _authCap();
+  if (!cap.uid) return;
   try {
-    const uid = window.FF_USER && window.FF_USER.id;
-    if (uid && window.ffSupa) await window.ffSupa.from('snapshot').delete().eq('owner', uid);
+    if (window.ffSupa) await window.ffSupa.from('snapshot').delete().eq('owner', cap.uid);
   } catch(e) { console.warn('Cloud clear failed:', e.message); }
-  localStorage.removeItem(LS_KEY);
+  if (!_authOk(cap)) return;
+  const k = _lsKey(cap.uid);                       // this account's cache only
+  if (k) { try { localStorage.removeItem(k); } catch(e){} }
   location.reload();
+}
+
+// Ordered teardown, run BEFORE signOut() while FF_USER is still set so the scoped
+// key can be resolved. The epoch bump is what actually stops in-flight work: the
+// 600ms save timer can otherwise fire during `await signOut()` and write the
+// outgoing user's CRM. Ordering alone would still be a race — the guard is not.
+window.__ffTeardown = function(opts) {
+  const removeScoped = !!(opts && opts.removeScoped);
+  _logoutInProgress = true;    // recovery is ineligible from this instant
+  _recoveryState = null;
+  _recoveryImporting = false;
+  _authEpoch++;
+  // Invalidate any bootstrap that is pending or still in flight, so a late
+  // initializer from this session cannot apply state into the next one.
+  if (typeof window.__ffBootInvalidate === 'function') window.__ffBootInvalidate();
+  clearTimeout(_saveTimer); _saveTimer = null;
+  _cloudWritable = false;
+  _savePending = false;
+  _saveInFlight = false;
+  _initSaveDone = false;
+  _crmLocked = false;
+  if (removeScoped) {
+    const k = _lsKey();                            // current user's scoped key only
+    if (k) { try { localStorage.removeItem(k); } catch(e){} }
+  }
+  _dirty = false;
+  _lastSavedAt = null;
+  try {
+    S.length=0; T.length=0; CA.length=0; done.clear(); clDone.clear();
+    qtHistory.length=0; laHistory.length=0;
+    VETLOG.length=0; FLOATLOADS.length=0; SHIPCREDIT.length=0; DOCLOADS.length=0;
+    JOBS.length=0; DRIVERS.length=0; GOVCONTACTS.length=0; EXCPTS.length=0;
+    IMPLOG.length=0; GLOG.length=0;
+    GC_OPPS.length=0; GC_PROP.length=0; GC_AWARDS.length=0;
+    GC_CONTRACTS.length=0; GC_TOS.length=0; GC_PERF.length=0;
+  } catch(e){}
+  window.FF_USER = null;
+  return true;
+};
+
+window.__ffHasDirty = function(){ return !!_dirty; };
+
+// Import the pre-P0-A unscoped cache into the signed-in account. Only ever runs
+// from an explicit click. The legacy key itself is never modified or removed.
+const RECOVERY_UNAVAILABLE_MSG =
+  'Recovering earlier browser data is not available right now.\n\n' +
+  'It is offered only for an account that has no data of its own yet and whose ' +
+  'cloud record has been positively confirmed as empty. This account already has ' +
+  'data, or its cloud state could not be safely verified.';
+
+const RECOVERY_WARNING =
+  'This imports earlier browser data into the account currently signed in.\n\n' +
+  'The app cannot verify that the earlier data belongs to this account.\n\n' +
+  'Importing REPLACES the current in-memory Futuro OS state and may synchronize ' +
+  'the imported data to this account\'s cloud record.\n\n' +
+  'Export a backup first if there is anything you may need to preserve.\n\n' +
+  'The original legacy browser copy will remain unchanged.\n\n' +
+  'Press Cancel to leave everything exactly as it is.';
+
+// The ONLY path that imports the legacy cache. Eligibility is re-checked here at
+// execution time, not trusted from whatever UI produced the click — a banner or
+// Settings button rendered in an earlier state must never authorize a later
+// unsafe import. Nothing is parsed until eligibility holds.
+function importLegacyCache() {
+  const cap = _authCap();
+  if (!_authOk(cap)) { _syncRecoveryUi(); return; }
+  if (!_recoveryEligibleCore(false)) {          // stale UI, or state moved on
+    alert(RECOVERY_UNAVAILABLE_MSG);
+    _syncRecoveryUi();
+    return;
+  }
+  _recoveryImporting = true;
+  try {
+    let raw = null;
+    try { raw = localStorage.getItem(LS_LEGACY); } catch(e){}
+    if (raw === null) { alert('No earlier Futuro OS data was found in this browser.'); return; }
+    let data = null;
+    try { data = JSON.parse(raw); }
+    catch(e) { alert('The earlier data in this browser could not be read, so it cannot be imported. It has been left in place, unchanged.'); return; }
+    if (!_validSnapshot(data)) { alert('The earlier data in this browser is not a usable Futuro OS snapshot. It has been left in place, unchanged.'); return; }
+
+    if (!confirm(RECOVERY_WARNING)) return;     // Cancel → nothing changes
+
+    // Re-check after the dialog: the user may have sat on it, and eligibility
+    // must still hold at the instant we replace state.
+    if (!_authOk(cap) || !_recoveryEligibleCore(true)) {
+      alert(RECOVERY_UNAVAILABLE_MSG);
+      _syncRecoveryUi();
+      return;
+    }
+    if (!_applyState(data)) { alert('That data could not be applied.'); return; }
+    ctMigrate(); syncAllScores();
+    if (!_authOk(cap)) return;                  // signed out during apply
+    _writeScopedLocal(_collectState(), cap.uid);
+    _recoveryState = null;                      // consumed: single-use by design
+    const b = document.getElementById('ff-legacy-banner'); if (b) b.remove();
+    saveAll();                                  // guarded; reports real cloud result
+    rNav(); go('control');
+  } finally {
+    _recoveryImporting = false;
+  }
+}
+
+// Content-free recovery notice. Discloses nothing about the legacy data — no
+// counts, no dates, no names — because the app cannot prove whose data it is.
+function _showLegacyRecovery() {
+  if (document.getElementById('ff-legacy-banner')) return;
+  const host = document.getElementById('ff-notices');
+  if (!host) return;
+  const b = document.createElement('div');
+  b.id = 'ff-legacy-banner';
+  b.setAttribute('role', 'status');
+  b.style.cssText = 'margin:10px 14px 0;padding:11px 14px;border-radius:10px;background:rgba(59,114,255,.10);border:1px solid rgba(59,114,255,.28);display:flex;gap:12px;align-items:center;flex-wrap:wrap';
+  const t = document.createElement('div');
+  t.style.cssText = 'flex:1;min-width:220px;font-size:12.5px;color:var(--t2);line-height:1.5';
+  t.textContent = 'This browser has Futuro OS data saved from an earlier version. The app cannot prove that data belongs to the account you are signed in as. It has been left untouched.';
+  const yes = document.createElement('button');
+  yes.type = 'button'; yes.className = 'btn-sm';
+  yes.textContent = 'Review and import…';
+  yes.addEventListener('click', importLegacyCache);
+  const no = document.createElement('button');
+  no.type = 'button'; no.className = 'btn-sm';
+  no.textContent = 'Not now';
+  no.addEventListener('click', function(){ b.remove(); });
+  b.appendChild(t); b.appendChild(yes); b.appendChild(no);
+  host.appendChild(b);
+}
+
+// Cloud unverifiable AND no local snapshot → the CRM must not be editable, and
+// must not look like a new account. Deliberately NOT a covering overlay: the
+// sidebar (sign out) and topbar stay live, so this state can never trap the app.
+function _setCrmLock(on) {
+  _crmLocked = !!on;
+  const c = document.getElementById('content');
+  if (c) {
+    c.style.pointerEvents = on ? 'none' : '';
+    c.style.opacity = on ? '.45' : '';
+    c.setAttribute('aria-disabled', on ? 'true' : 'false');
+  }
+  const host = document.getElementById('ff-notices');
+  let bar = document.getElementById('ff-cloud-lock');
+  if (!on) { if (bar) bar.remove(); return; }
+  if (bar || !host) return;
+  bar = document.createElement('div');
+  bar.id = 'ff-cloud-lock';
+  bar.setAttribute('role', 'alert');
+  bar.style.cssText = 'margin:10px 14px 0;padding:11px 14px;border-radius:10px;background:rgba(220,38,38,.10);border:1px solid rgba(248,113,113,.30);display:flex;gap:12px;align-items:center;flex-wrap:wrap';
+  const t = document.createElement('div');
+  t.style.cssText = 'flex:1;min-width:220px;font-size:12.5px;color:var(--t2);line-height:1.5';
+  t.textContent = 'Your account data could not be verified, so editing is paused to protect it. Nothing has been changed or deleted. This is not a new account — retry when you have a connection.';
+  const r = document.createElement('button');
+  r.type = 'button'; r.className = 'btn-sm';
+  r.textContent = 'Retry';
+  r.addEventListener('click', retryCloudVerify);
+  bar.appendChild(t); bar.appendChild(r);
+  host.appendChild(bar);
+}
+
+async function retryCloudVerify() {
+  _setSaveChip('Checking cloud…');
+  const res = await loadSnapshot();
+  __ffApplyLoadResult(res);
+  if (!_crmLocked) { rNav(); go('control'); }
+}
+
+// Single place that turns a load result into app state. Used by first init and by
+// the retry action, so both paths can never drift apart.
+function __ffApplyLoadResult(res) {
+  if (res.preserve === 'at-cap') {
+    console.warn('Local cache recovery copies are at the retention cap; none created.');
+  }
+  if (res.state === LOAD_STATE.ERROR) {
+    _cloudWritable = false;
+    _recoveryState = null;     // cloud unverified: recovery must never be offered
+    if (res.source === 'local') {
+      _setCrmLock(false);
+      _setSaveChip('sync-unavailable');
+    } else {
+      _setCrmLock(true);
+      _setSaveChip('sync-unavailable');
+    }
+    _syncRecoveryUi();
+    return;
+  }
+  _cloudWritable = true;
+  _setCrmLock(false);
+  if (res.state === LOAD_STATE.ABSENT) {
+    if (res.source === 'local') {
+      // Cloud is empty but this account HAS local data: not a recovery state.
+      // Importing here would destroy that data.
+      _recoveryState = null;
+      _dirty = true;
+      saveAll();               // seed the first cloud row from preserved local data
+      _setSaveChip('local');
+    } else {
+      // The one approved recovery state: cloud row positively confirmed absent
+      // AND no valid scoped snapshot for this user at load time.
+      _recoveryState = {
+        uid: (window.FF_USER && window.FF_USER.id) || null,
+        epoch: _authEpoch,
+        cloudAbsent: true,
+        scopedAbsentAtLoad: true
+      };
+      if (!_initSaveDone) { _initSaveDone = true; saveAll(); }   // new user, exactly once
+      _setSaveChip('local');
+    }
+    _syncRecoveryUi();
+    return;
+  }
+  // A cloud row loaded: this account has cloud state. Never a recovery state.
+  _recoveryState = null;
+  _syncRecoveryUi();
+  _setSaveChip('cloud');
+  if (res.source === 'local') { _dirty = true; saveAll(); }      // local was newer
 }
 
 function getSaveStatus() {
@@ -1042,7 +1554,7 @@ function importBackup(){
         if(!confirm('Restore backup from '+when+'?\n\nThis REPLACES everything currently in the app. Consider exporting the current data first.'))return;
         if(!_applyState(data)){alert('The backup could not be applied.');return;}
         ctMigrate();syncAllScores();saveAll();rNav();go('control');
-        alert('Backup restored ('+ (data.JOBS?data.JOBS.length:0) +' jobs, '+(data.S?data.S.length:0)+' clients). It has been re-saved to your account.');
+        alert('Backup restored ('+ (data.JOBS?data.JOBS.length:0) +' jobs, '+(data.S?data.S.length:0)+' clients).'+(_cloudWritable?' It has been re-saved to your account.':' Saved on this browser only — the cloud is currently unavailable, so it will sync once the connection is verified.'));
       }catch(e){alert('Could not read that file: '+e.message);}
     };
     rd.readAsText(f);
@@ -1101,6 +1613,7 @@ function _setSaveChip(mode){
   chip.classList.remove('cloud','local');
   if(mode==='cloud'){chip.classList.add('cloud');txt.textContent='Cloud · saved '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});}
   else if(mode==='local'){chip.classList.add('local');txt.textContent='Saved locally · cloud offline';}
+  else if(mode==='sync-unavailable'){chip.classList.add('local');txt.textContent='Cloud unavailable · working locally';}
   else{txt.textContent=mode;}
 }
 function _setSaveBadge(mode){
@@ -1472,8 +1985,8 @@ async function acceptInbound(id){
   try{ await window.ffSupa.from('inbound_leads').update({status:'accepted'}).eq('id',id); }catch(e){ console.warn('mark accepted failed',e.message); }
   INBOX=INBOX.filter(x=>x.id!==id);
   rNav(); rInbox();
-  // gentle confirmation
-  _setSaveBadge('cloud');
+  // NOTE: no _setSaveBadge('cloud') here — saveAll() above only queues a debounced
+  // write. Only a confirmed upsert in _pushToCloud() may claim a cloud save.
 }
 
 async function dismissInbound(id){
@@ -2200,6 +2713,17 @@ function rSettings(){
     <div class="set-field">
       <span class="set-label">Restore backup</span>
       <button class="btn-sm" onclick="importBackup()"><i class="ti ti-upload" aria-hidden="true"></i> Import backup file</button>
+    </div>
+    ${_legacyKeyPresent()?(_recoveryEligible()?`<div class="set-field">
+      <span class="set-label">Recover earlier browser data<br><span style="font-size:11px;color:var(--t3);font-weight:400">Saved by an older version of Futuro OS. Cannot be verified as belonging to this account.</span></span>
+      <button class="btn-sm" onclick="importLegacyCache()"><i class="ti ti-history" aria-hidden="true"></i> Review and import…</button>
+    </div>`:`<div class="set-field">
+      <span class="set-label">Recover earlier browser data<br><span style="font-size:11px;color:var(--t3);font-weight:400">Unavailable: this account already has data, or its cloud state could not be safely verified.</span></span>
+      <button class="btn-sm" disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"><i class="ti ti-history" aria-hidden="true"></i> Unavailable</button>
+    </div>`):''}
+    <div class="set-field">
+      <span class="set-label">Offline data on this browser<br><span style="font-size:11px;color:var(--t3);font-weight:400">Signing out normally keeps it, so unsynced work survives.</span></span>
+      <button class="btn-sm" style="color:var(--tamber)" onclick="ffLogoutForget()"><i class="ti ti-logout" aria-hidden="true"></i> Sign out and remove offline data</button>
     </div>
     <div class="set-field" style="border-bottom:none">
       <span class="set-label">Erase all records</span>
@@ -5354,8 +5878,12 @@ document.addEventListener('keydown',e=>{
 });
 
 // Load saved data on startup
-window.__ffInit = async function(){
-const _loaded = await loadAll();
+window.__ffInit = async function(bootEpoch){
+const _res = await loadSnapshot();
+// A bootstrap from a previous session must never paint or persist its result.
+// loadSnapshot() already refuses to APPLY state across an epoch change; this
+// abandons the rest of init (chip, lock, first-run save) as well.
+if (window.__ffBoot && typeof bootEpoch === 'number' && bootEpoch !== window.__ffBoot.epoch) return;
 syncAllScores(); // compute live Fit Scores from current data
 ctMigrate(); // Control Tower schema v2: default-fill jobs, seed demo data on first run
 // Update logo name if org settings were saved
@@ -5364,13 +5892,14 @@ if (_logoEl) _logoEl.textContent = 'Futuro OS'; // product brand is fixed; compa
 // keyboard access for dynamically rendered clickable rows/cards
 const _contentEl = document.getElementById('content');
 if (_contentEl) new MutationObserver(()=>enhanceA11y()).observe(_contentEl,{childList:true,subtree:true});
-// persistent save chip: initial state
-_setSaveChip(window.FF_USER ? (_loaded ? 'cloud' : 'Cloud connected · not saved yet') : 'local');
+// persistent save chip + cloud-state gating: derived from the load result, never
+// from an assumption that reaching this line means the cloud is healthy.
+__ffApplyLoadResult(_res);
 go('control');
 fetchInbox(); // pull website leads + populate inbox badge
 fetchDeliveries(); // shared driver job list + badge + live sync with mobile
-// Show subtle save indicator if data was loaded
-if (_loaded) {
+// Show subtle save indicator only when a cloud row actually loaded
+if (_res.state === LOAD_STATE.LOADED) {
   const _st = getSaveStatus();
   const _ind = document.createElement('div');
   _ind.setAttribute('role','status');
@@ -5379,8 +5908,10 @@ if (_loaded) {
   document.body.appendChild(_ind);
   setTimeout(() => _ind.remove(), 3000);
 }
-// First run: show the welcome walkthrough once
-if (!orgSettings.tutorialSeen) {
+// First run: show the welcome walkthrough once. Gated on a verified-writable cloud
+// state — orgSettings has no tutorialSeen default, so a FAILED load previously left
+// this true and fired saveAll(), upserting empty state over a good cloud row.
+if (_cloudWritable && !_crmLocked && !orgSettings.tutorialSeen) {
   orgSettings.tutorialSeen = true;
   saveAll();
   setTimeout(()=>showTutorial('welcome'), 400);
@@ -5842,6 +6373,15 @@ function rPerformance(){
   if(!GC_PERF.length){c.innerHTML=gcEmpty('ti-star','No performance records yet','Record completed work from a contract to build capability-statement evidence.','');return;}
   c.innerHTML=`<div class="card" style="padding:0;overflow-x:auto"><table class="gc-tbl"><thead><tr><th>Scope</th><th>Agency</th><th>Period</th><th>Jobs</th><th>On-time</th><th>Type</th></tr></thead><tbody>${GC_PERF.map(p=>`<tr><td style="color:var(--t1);font-weight:600">${esc(p.scope||'—')}</td><td>${esc(p.agency||'—')}</td><td style="font-size:11.5px">${esc(p.periodStart||'—')}${p.periodEnd?' → '+esc(p.periodEnd):''}</td><td>${p.jobsCompleted||0}</td><td>${p.onTimeRate?esc(String(p.onTimeRate))+'%':'—'}</td><td>${p.official?'<span class="badge" style="background:var(--bgreen);color:var(--tgreen)">CPARS-eligible</span>':'<span class="badge" style="background:var(--bg4);color:var(--t3)">internal</span>'}</td></tr>`).join('')}</tbody></table></div>`;
 }
+
+// ============================================================================
+// Hand the initializer to the bootstrap coordinator in the auth script above.
+// This MUST be the last statement in this block: if authentication has already
+// resolved, the coordinator invokes __ffInit synchronously from right here, so
+// every declaration it depends on has to exist by this point.
+// ============================================================================
+if (typeof window.__ffRegisterInit === 'function') window.__ffRegisterInit(window.__ffInit);
+else console.warn('Futuro OS: bootstrap coordinator missing; app cannot start.');
 </script>
 </body>
 </html>
