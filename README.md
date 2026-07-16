@@ -156,10 +156,67 @@ business pipeline (freight deals + live SAM.gov GovCon sourcing).
   Kelly-green gradient primaries with glow, Syne body + JetBrains Mono micro-labels,
   Tabler icons, and the soundwave f-clef logo lockup (`icons/mark.svg` is the monogram,
   also used for the PWA icon).
-- **Storage:** everything in `localStorage` under `fos.*` keys (`fos.jobs`, `fos.settings`,
-  `fos.track.<date>` GPS breadcrumbs; legacy `deals` key is kept for pipeline data).
+- **Storage:** durable, account-scoped state (jobs + deals + settings) lives in a single
+  snapshot per account under `fos.acct.<scope>` in `localStorage`, mirrored to an
+  IndexedDB durability tier (see *Mobile offline durability* below). `fos.track.<date>`
+  GPS breadcrumbs and device-level keys (`fos.pinHash`, `fos.lockMins`, …) stay separate.
   POD photos are downscaled (≤900px JPEG, max 3/job) to respect the ~5MB quota; use
   the JSON backup regularly.
+
+## Mobile offline durability
+
+The mobile CRM must never silently discard valid offline work, show an empty CRM while
+good local data exists, or upload stale/default state over a newer cloud copy. The rules,
+implemented entirely in `mobile/app.js` (the centralized `Store` layer):
+
+**Per-account scope.** All durable state is keyed by scope: the authenticated Supabase
+user id when signed in, or `local` while signed out. Two accounts on one phone can never
+read or overwrite each other's work — the same isolation contract as the desktop
+per-account cache (`_authEpoch` / capture-and-recheck around every `await`). On sign-out
+the app returns to the anonymous scope; the signed-in account's cache is **kept** for the
+next sign-in, not shown to the anonymous session.
+
+**Two durability tiers.** `localStorage` is the fast, synchronous live store the UI reads;
+per-key writes are atomic (a key is fully replaced or left unchanged — never half-written).
+IndexedDB (`futuroos-mobile` → `snapshots`) is a second, eviction-resistant tier that keeps
+a **last-known-good** copy. A corrupt or unreadable current snapshot can no longer throw at
+load and blank the app: it is preserved byte-for-byte under `fos.acct.<scope>.recovery.<ts>`
+(max 3 per scope, never overwritten, never uploaded), and the app falls back to the
+last-known-good snapshot, then to the IndexedDB tier.
+
+**Serialized, coalesced writes.** Durable writes run on one queue that keeps only the newest
+snapshot, so a slow older write can never replace a newer one. A failed local write returns
+`ok:false`; the app warns and never reports "saved".
+
+**Lifecycle durability.** On `visibilitychange`→hidden, `pagehide`, and `freeze`, the latest
+in-memory snapshot is forced to durable local storage first (synchronous), then any pending
+cloud write is flushed — guarded so nothing is written under a signed-out/other account.
+
+**Reconnection & the `savedAt` rule.** Cloud load has three distinct outcomes and an error is
+never mistaken for "no data": a `CLOUD_LOAD_ERROR` blocks writes and keeps local data;
+`CLOUD_ROW_ABSENT` (positively confirmed) or a strictly-newer local snapshot uploads once;
+a strictly-newer cloud snapshot is applied once (and its `savedAt` is preserved locally so no
+upload loop follows). **Exact `savedAt` ties resolve to the local device** (deterministic):
+it re-uploads the same stamp a single time and converges — this differs from the desktop
+snapshot (cloud wins ties) because mobile jobs are the authoritative shared `jobs` table and
+`mobile_snapshot` carries only deals + settings. A snapshot we cannot trust (corrupt/
+unrecovered) is never uploaded over the cloud.
+
+**Storage failure.** Quota/security/IndexedDB-unavailable failures degrade safely: current
+in-memory work is preserved, the failure is surfaced (never a false "saved"), and on POD
+completion the heavy photos are dropped before the delivery record itself is lost.
+
+**Service-worker boundary.** This work does not touch `mobile/sw.js` — cache names, the
+install/activate lifecycle, `skipWaiting`/`clients.claim`, and the app-shell caching strategy
+are unchanged (`fos-v12`). The controller-change reload also fires `pagehide`, so an update
+mid-edit is flushed by the lifecycle handler above without any service-worker change. Any
+service-worker update risk is reserved for the separate P0-D task.
+
+Regression coverage lives outside this repo at
+`../FuturoFreight_Test_Harnesses/p0c-harness.html` (23 scenarios: durable local write, offline
+reload, rapid-edit coalescing, hide/pagehide flush, interrupted-write and corruption recovery,
+no-upload-of-corrupt-state, quota-failure surfacing, offline startup, reconnection/tie/error
+reconciliation, logout during a pending write, account isolation, stale-session rejection).
 - **External services (all free, all optional):** Nominatim (geocoding), OSRM demo
   server (road routing/optimization), OpenStreetMap tiles, SAM.gov API. Every one has
   an offline/failure fallback — the app never blocks on the network.
