@@ -30,6 +30,7 @@
   <div class="appbar-actions">
     <i id="cloudDot" class="ti ti-cloud-off cloud-dot" title="Cloud sync off"></i>
     <span id="gpsDot" class="gps-dot off" title="GPS status"></span>
+    <a class="icon-btn" id="btnDesktop" href="../" target="_blank" rel="noopener" aria-label="Open Futuro OS desktop" style="display:grid;place-items:center;text-decoration:none"><i class="ti ti-device-desktop"></i></a>
     <button class="icon-btn" id="btnSettings" aria-label="Settings"><i class="ti ti-settings"></i></button>
   </div>
 </header>
@@ -173,6 +174,9 @@
       <label class="grow">Rate ($) <input id="jRate" type="number" class="input" placeholder="0"></label>
       <label class="grow">Required barcode <input id="jBarcode" class="input" placeholder="optional"></label>
     </div>
+    <label class="check-row"><input type="checkbox" id="jSecure">
+      <span><i class="ti ti-shield-lock"></i> Secure delivery — enforce full chain of custody (photo + signature + recipient name required)</span>
+    </label>
     <label>Notes <textarea id="jNotes" class="input" rows="2"></textarea></label>
     <div class="row gap8">
       <button class="btn danger" id="btnDeleteJob" hidden>Delete</button>
@@ -220,6 +224,7 @@
       <div id="podBarcodes" class="hint"></div>
     </div>
 
+    <label>Received by (name) <input id="podRecvName" class="input" placeholder="Who accepted the delivery" autocomplete="off"></label>
     <label>Note <input id="podNote" class="input" placeholder="Left at front desk…"></label>
 
     <div class="row gap8">
@@ -255,7 +260,7 @@
         <button class="btn grow" id="btnCloudAuth"><i class="ti ti-cloud"></i> Sign in</button>
         <button class="btn grow" id="btnCloudPush" hidden><i class="ti ti-cloud-up"></i> Sync now</button>
       </div>
-      <div class="hint" style="margin-top:8px"><a href="../" style="color:var(--tgreen)">Open Futuro OS desktop →</a></div>
+      <div class="hint" style="margin-top:8px"><a href="../" target="_blank" rel="noopener" style="color:var(--tgreen)">Open Futuro OS desktop →</a></div>
     </div>
     <label>Company name <input id="sCompany" class="input"></label>
     <label>Your phone <input id="sPhone" class="input" inputmode="tel"></label>
