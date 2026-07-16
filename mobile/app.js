@@ -52,7 +52,7 @@ const S = {
   view: 'today'
 };
 
-const saveJobs = () => { localStorage.setItem('fos.jobs', JSON.stringify(S.jobs)); queueCloudSave(); };
+const saveJobs = () => { localStorage.setItem('fos.jobs', JSON.stringify(S.jobs)); queueJobSync(); };
 const saveDeals = () => { localStorage.setItem('deals', JSON.stringify(S.deals)); queueCloudSave(); };
 const saveSettings = () => { localStorage.setItem('fos.settings', JSON.stringify(S.settings)); queueCloudSave(); };
 
@@ -359,6 +359,7 @@ function show(view) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
   if (view === 'map') initMap();
   if (view === 'drive') startGps();
+  if (view === 'biz' && typeof supa !== 'undefined' && supa && cloudUser) fetchInbox();
   render();
 }
 
@@ -383,7 +384,7 @@ function stopCard(j, i, etas) {
   return `<div class="stop ${j.status === 'done' || j.status === 'failed' ? 'done' : ''}" data-id="${j.id}">
     <div class="stop-seq ${cur && cur.id === j.id ? 'active-stop' : ''}">${i}</div>
     <div class="stop-body">
-      <div class="stop-name">${esc(j.customer || 'Unnamed')} ${j.type === 'pickup' ? '<span class="badge type-pickup">Pickup</span>' : ''}${j.secure ? '<span class="badge ontime">🛡 Secure</span>' : ''}</div>
+      <div class="stop-name">${esc(j.customer || 'Unnamed')} ${j.type === 'pickup' ? '<span class="badge type-pickup">Pickup</span>' : ''}${j.secured ? '<span class="badge ontime">🛡 Secured</span>' : ''}</div>
       <div class="stop-addr">${esc(j.address || 'No address')}</div>
       <div class="stop-meta">
         ${statusBadge(j)}
@@ -492,8 +493,8 @@ function updateMyMarker() {
   if (!map || !S.pos) return;
   if (!myMarker) {
     myMarker = L.circleMarker([S.pos.lat, S.pos.lng], {radius: 8, color: '#86a6ff', fillColor: '#3b72ff', fillOpacity: .9}).addTo(map);
-    // first GPS fix: if the map is still on the country-level default view and
-    // there are no geocoded stops to frame, bring it to the driver
+    // first GPS fix: if still on the country-level default with no stops to
+    // frame, bring the map to the driver
     if (map.getZoom() <= 5 && !jobsOn(S.date).some(j => j.lat != null)) {
       map.setView([S.pos.lat, S.pos.lng], 14);
     }
@@ -550,14 +551,17 @@ function openJobSheet(id, prefill) {
   $('jType').value = j?.type || 'delivery';
   $('jName').value = j?.customer || prefill?.customer || '';
   $('jPhone').value = j?.phone || '';
+  $('jEmail').value = j?.email || '';
   $('jAddress').value = j?.address || '';
   $('jDate').value = j?.date || S.date;
   $('jWinS').value = j?.winS || '';
   $('jWinE').value = j?.winE || '';
   $('jRate').value = j?.rate ?? (prefill?.rate ?? '');
   $('jBarcode').value = j?.barcodeRequired || '';
-  $('jSecure').checked = !!j?.secure;
   $('jNotes').value = j?.notes || '';
+  $('jSecured').checked = !!j?.secured;
+  $('jMinAge').value = j?.minAge || '';
+  $('jMinAgeWrap').hidden = !j?.secured;
   $('geoStatus').textContent = j?.lat != null ? `📍 ${j.lat.toFixed(5)}, ${j.lng.toFixed(5)}` : '';
   $('btnDeleteJob').hidden = !id;
   $('jobSheet').hidden = false;
@@ -583,6 +587,7 @@ async function saveJob() {
   j.type = $('jType').value;
   j.customer = $('jName').value.trim();
   j.phone = $('jPhone').value.trim();
+  j.email = $('jEmail').value.trim();
   const addrChanged = j.address !== $('jAddress').value.trim();
   j.address = $('jAddress').value.trim();
   j.date = $('jDate').value || S.date;
@@ -590,8 +595,9 @@ async function saveJob() {
   j.winE = $('jWinE').value;
   j.rate = +$('jRate').value || 0;
   j.barcodeRequired = $('jBarcode').value.trim();
-  j.secure = $('jSecure').checked;
   j.notes = $('jNotes').value.trim();
+  j.secured = $('jSecured').checked;
+  j.minAge = +$('jMinAge').value || 0;
   if (window._pendingGeo) { j.lat = window._pendingGeo.lat; j.lng = window._pendingGeo.lng; }
   else if (addrChanged && j.address) {
     try { const g = await geocode(j.address); j.lat = g.lat; j.lng = g.lng; }
@@ -604,6 +610,7 @@ async function saveJob() {
     if (window._pendingDeal) j.sourceDealId = window._pendingDeal;
   }
   saveJobs();
+  syncCalendar(j);
   $('jobSheet').hidden = true;
   toast(isNew ? 'Job added' : 'Job saved');
   render();
@@ -614,7 +621,7 @@ function openDetail(id) {
   const j = S.jobs.find(x => x.id === id);
   if (!j) return;
   const rows = [
-    ['Status', j.status], ['Type', j.type + (j.secure ? ' · 🛡 secure' : '')], ['Date', j.date],
+    ['Status', j.status], ['Type', j.type], ['Date', j.date],
     ['Window', (j.winS || j.winE) ? `${j.winS || '…'}–${j.winE || '…'}` : '—'],
     ['Phone', j.phone || '—'], ['Rate', j.rate ? fmt$(j.rate) : '—'],
     ['Notes', j.notes || '—']
@@ -623,14 +630,27 @@ function openDetail(id) {
     `<div class="detail-row"><span>${e.type}${e.label ? ' · ' + esc(e.label) : ''}</span><span>${new Date(e.t).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'})}</span></div>`).join('');
   const pod = j.pod ? `
     <h3 style="margin-top:14px">Proof of ${j.status === 'failed' ? 'attempt' : 'delivery'}</h3>
-    ${j.pod.receivedBy ? `<div class="detail-row"><span>Received by</span><span>${esc(j.pod.receivedBy)}</span></div>` : ''}
     ${j.pod.reason ? `<div class="detail-row"><span>Fail reason</span><span>${esc(j.pod.reason)}</span></div>` : ''}
     ${j.pod.note ? `<div class="detail-row"><span>Note</span><span>${esc(j.pod.note)}</span></div>` : ''}
     ${j.pod.barcodes?.length ? `<div class="detail-row"><span>Barcodes</span><span>${j.pod.barcodes.map(esc).join(', ')}</span></div>` : ''}
+    ${j.pod.receivedBy ? `<div class="detail-row"><span>Received by</span><span>${esc(j.pod.receivedBy)}</span></div>` : ''}
+    ${j.pod.idVerify ? `<div class="detail-row"><span>ID verified</span><span>${j.pod.idVerify.verified ? '✓' : '⚠'} ${esc(j.pod.idVerify.method || '')}${j.pod.idVerify.age != null ? ' · age ' + j.pod.idVerify.age : ''}</span></div>` : ''}
     ${j.pod.lat ? `<div class="detail-row"><span>Location</span><span>${j.pod.lat.toFixed(5)}, ${j.pod.lng.toFixed(5)}</span></div>` : ''}
     ${j.pod.hash ? `<div class="detail-row"><span>Integrity</span><span style="font-family:var(--mono);font-size:11px">${j.pod.hash.slice(0, 16)}…</span></div>` : ''}
     <div class="detail-photos">${(j.pod.photos || []).map(p => `<img src="${p}" alt="POD photo">`).join('')}</div>
     ${j.pod.signature ? `<img class="detail-sig" src="${j.pod.signature}" alt="Signature">` : ''}` : '';
+  const rc = j.pod && j.pod.receipt;
+  const chStat = s => s === 'sent' ? '✓ sent' : s === 'not_configured' ? 'needs keys' : s === 'skipped' ? '—' : s ? esc(s) : '—';
+  const receiptBlock = (j.status === 'done') ? `
+    <h3 style="margin-top:14px">Customer receipt</h3>
+    ${rc && rc.conf ? `<div class="detail-row"><span>Confirmation</span><span>${esc(rc.conf)}</span></div>` : ''}
+    ${rc && rc.email !== undefined ? `<div class="detail-row"><span>Email</span><span>${chStat(rc.email)}</span></div>` : ''}
+    ${rc && rc.sms !== undefined ? `<div class="detail-row"><span>Text</span><span>${chStat(rc.sms)}</span></div>` : ''}
+    ${rc && rc.pending ? `<div class="detail-row"><span>Status</span><span>pending — not sent yet</span></div>` : ''}
+    <div class="row gap8" style="margin-top:8px">
+      <button class="btn small grow" id="dRcptDl"><i class="ti ti-download"></i> Download PDF</button>
+      <button class="btn small grow success" id="dRcptSend"><i class="ti ti-send"></i> ${rc && rc.sentAt ? 'Resend' : 'Send'}</button>
+    </div>` : '';
   $('detailContent').innerHTML = `
     <div class="stop-name" style="font-size:18px">${esc(j.customer || 'Unnamed')}</div>
     <div class="stop-addr" style="white-space:normal">${esc(j.address || '')}</div>
@@ -638,39 +658,49 @@ function openDetail(id) {
       <button class="btn small" id="dEdit"><i class="ti ti-pencil"></i> Edit</button>
       <button class="btn small" id="dNav"><i class="ti ti-navigation"></i> Navigate</button>
       ${j.status !== 'done' && j.status !== 'failed' ? '<button class="btn small success" id="dPod"><i class="ti ti-checklist"></i> POD</button>' : ''}
-      ${j.pod ? '<button class="btn small" id="dReceipt"><i class="ti ti-file-certificate"></i> Receipt</button>' : ''}
+      ${j.pod ? '<button class="btn small" id="dCustody"><i class="ti ti-file-certificate"></i> Custody record</button>' : ''}
       ${j.status === 'done' || j.status === 'failed' ? '<button class="btn small" id="dReopen"><i class="ti ti-arrow-back-up"></i> Reopen</button>' : ''}
     </div>
     ${rows.map(r => `<div class="detail-row"><span>${r[0]}</span><span>${esc(r[1])}</span></div>`).join('')}
     ${pod}
+    ${receiptBlock}
     ${events ? `<h3 style="margin-top:14px">Activity</h3>${events}` : ''}`;
   $('detailSheet').hidden = false;
   $('dEdit').onclick = () => { $('detailSheet').hidden = true; openJobSheet(id); };
   $('dNav').onclick = () => window.open(navLink(j), '_blank');
   const dPod = $('dPod'); if (dPod) dPod.onclick = () => { $('detailSheet').hidden = true; openPod(id); };
-  const dRc = $('dReceipt'); if (dRc) dRc.onclick = () => openPodReceipt(id);
+  const dCu = $('dCustody'); if (dCu) dCu.onclick = () => openCustodyRecord(id);
   const dRe = $('dReopen'); if (dRe) dRe.onclick = () => { j.status = 'pending'; j.pod = null; saveJobs(); $('detailSheet').hidden = true; render(); };
+  const dDl = $('dRcptDl'); if (dDl) dDl.onclick = () => downloadReceipt(id);
+  const dSend = $('dRcptSend'); if (dSend) dSend.onclick = () => resendReceipt(id);
 }
 
 /* ---------------- POD ---------------- */
 const pod = {photos: [], signature: null, barcodes: [], drawn: false};
+let idv = null, idStream = null;   // ID-verification result + scanner stream (secured deliveries)
 function openPod(id) {
   const j = S.jobs.find(x => x.id === id);
   if (!j) return;
   S.podJobId = id;
   pod.photos = []; pod.signature = null; pod.barcodes = []; pod.drawn = false;
+  idv = null;
+  const secured = !!j.secured;
+  $('podIdBlock').hidden = !secured;
+  $('idResult').innerHTML = '';
+  $('idScanStatus').textContent = '';
+  $('idVideo').hidden = true;
+  $('podIdReq').textContent = secured ? (j.minAge ? `required · ${j.minAge}+` : 'required') : '';
   $('podJobLine').textContent = `${j.customer || ''} — ${j.address || ''}`;
   $('podPhotos').innerHTML = '';
   $('podPhotoCount').textContent = '';
   $('podBarcodes').textContent = '';
   $('podBarcodeIn').value = '';
   $('podNote').value = '';
-  $('podStatus').textContent = '';
+  $('podRecvName').value = '';
+  $('podStatus').textContent = j.secured ? '🛡 Secured delivery — photo, signature, and recipient name are required to complete.' : '';
   $('scanStatus').textContent = ('BarcodeDetector' in window) ? '' : 'Live scan not supported here — type the code.';
   $('podBarcodeReq').textContent = j.barcodeRequired ? `required: ${j.barcodeRequired}` : '';
-  $('podRecvName').value = '';
   $('sigStatus').textContent = '';
-  if (j.secure) $('podStatus').textContent = '🛡 Secure delivery — photo, signature, and recipient name are required to complete.';
   initSigPad();
   $('podSheet').hidden = false;
 }
@@ -756,26 +786,28 @@ async function finishPod(failed) {
   const typed = $('podBarcodeIn').value.trim();
   if (typed) registerBarcode(typed);
   const receivedBy = $('podRecvName').value.trim();
-  if (!failed && j.secure) {
-    // secure deliveries: full chain of custody is mandatory, no overrides
+  if (!failed && j.secured) {
+    // secured deliveries: the custody basics are mandatory, no overrides
     const missing = [];
     if (!pod.photos.length) missing.push('photo');
     if (!pod.drawn) missing.push('signature');
     if (!receivedBy) missing.push('recipient name');
     if (j.barcodeRequired && !pod.barcodes.includes(j.barcodeRequired)) missing.push(`barcode ${j.barcodeRequired}`);
     if (missing.length) {
-      $('podStatus').textContent = '🛡 Secure delivery — still needed: ' + missing.join(', ') + '.';
+      $('podStatus').textContent = '🛡 Secured delivery — still needed: ' + missing.join(', ') + '.';
       return;
     }
   } else if (!failed && j.barcodeRequired && !pod.barcodes.includes(j.barcodeRequired)) {
     if (!confirm(`Required barcode ${j.barcodeRequired} not scanned. Complete anyway?`)) return;
+  }
+  if (!failed && j.secured && (!idv || !idv.verified)) {
+    if (!confirm('Recipient ID is not verified. Complete this secured delivery anyway?')) return;
   }
   let reason = '';
   if (failed) {
     reason = prompt('Reason (no answer / refused / wrong address / other):', 'no answer') || 'unspecified';
   }
   const cv = $('sigPad');
-  const completedAt = new Date().toISOString();
   j.pod = {
     photos: pod.photos,
     signature: pod.drawn ? cv.toDataURL('image/jpeg', 0.6) : null,
@@ -783,15 +815,17 @@ async function finishPod(failed) {
     receivedBy,
     note: $('podNote').value.trim(),
     reason,
-    t: completedAt,
+    idVerify: (!failed && j.secured) ? idv : null,
+    t: new Date().toISOString(),
     lat: S.pos?.lat ?? null, lng: S.pos?.lng ?? null
   };
-  // tamper-evident integrity hash over the custody-relevant facts
+  // tamper-evident integrity fingerprint over the custody facts
   j.pod.hash = await sha256Hex(JSON.stringify({
-    job: j.id, customer: j.customer, address: j.address, secure: !!j.secure,
-    status: failed ? 'failed' : 'done', completedAt,
+    job: j.id, customer: j.customer, address: j.address, secured: !!j.secured,
+    status: failed ? 'failed' : 'done', completedAt: j.pod.t,
     lat: j.pod.lat, lng: j.pod.lng, receivedBy,
     barcodes: pod.barcodes, note: j.pod.note, reason,
+    idVerified: !!(j.pod.idVerify && j.pod.idVerify.verified),
     photoCount: pod.photos.length, signed: !!j.pod.signature
   }));
   j.status = failed ? 'failed' : 'done';
@@ -801,17 +835,226 @@ async function finishPod(failed) {
     j.pod.photos = []; saveJobs(); toast('Storage full — photos not saved');
   }
   fireWebhook(failed ? 'job.failed' : 'job.completed', j);
-  stopScan();
+  stopScan(); stopIdScan();
   $('podSheet').hidden = true;
   toast(failed ? 'Marked failed' : '✓ Delivered');
-  if (!failed && j.phone && confirm('Send "delivery complete" text to customer?')) {
-    sendSms(j, S.settings.tmplDone, 'completed');
-  }
   render();
+  // Completed deliveries mint a confirmation number + PDF receipt and email/text
+  // the customer (best-effort; degrades gracefully offline or before keys are set).
+  if (!failed) issueReceipt(j);
 }
 
-/* ---------------- POD receipt — chain of custody record ---------------- */
-function podReceiptHtml(j) {
+/* ---------------- ID verification (secured deliveries) ---------------- */
+// Parse the PDF417 barcode on the back of a US/CA driver license (AAMVA).
+function parseAAMVA(raw) {
+  const get = code => { const m = String(raw).match(new RegExp(code + '([^\\n\\r]*)')); return m ? m[1].trim() : ''; };
+  const parseDate = s => {
+    s = (s || '').replace(/\D/g, ''); if (s.length !== 8) return null;
+    let mo = +s.slice(0, 2), da = +s.slice(2, 4), yr = +s.slice(4, 8);          // MMDDYYYY (US)
+    if (mo >= 1 && mo <= 12 && da >= 1 && da <= 31 && yr >= 1900 && yr <= 2100) return new Date(yr, mo - 1, da);
+    yr = +s.slice(0, 4); mo = +s.slice(4, 6); da = +s.slice(6, 8);              // YYYYMMDD (CA)
+    if (mo >= 1 && mo <= 12 && da >= 1 && da <= 31 && yr >= 1900 && yr <= 2100) return new Date(yr, mo - 1, da);
+    return null;
+  };
+  const last = get('DCS'), first = get('DAC') || get('DCT');
+  return { first, last, name: (first + ' ' + last).trim(),
+    dob: parseDate(get('DBB')), expiry: parseDate(get('DBA')), licLast4: (get('DAQ') || '').slice(-4) };
+}
+// Reduce a parsed ID to a stored-safe verification RESULT — never the raw ID.
+function verifyId(p, job) {
+  const now = new Date();
+  const age = p.dob ? Math.floor((now - p.dob) / (365.25 * 864e5)) : null;
+  const minAge = +job.minAge || 0;
+  const ageOk = minAge ? (age != null && age >= minAge) : true;
+  const notExpired = p.expiry ? p.expiry >= now : null;
+  const cust = (job.customer || '').toLowerCase();
+  const nameMatch = p.last ? cust.includes(p.last.toLowerCase()) : false;
+  const verified = ageOk && notExpired !== false && (nameMatch || !job.customer);
+  return { method: 'barcode', verified, nameMatch, age, ageOk, minAge, notExpired,
+    licLast4: p.licLast4, name: p.name, ts: new Date().toISOString() };
+}
+function renderIdResult(v, job) {
+  const chip = (ok, txt) => `<span class="badge ${ok === true ? 'ontime' : ok === false ? 'late' : ''}" style="margin:2px 4px 0 0">${ok === true ? '✓' : ok === false ? '✕' : '•'} ${esc(txt)}</span>`;
+  const parts = [];
+  if (v.method === 'barcode') {
+    if (job && job.customer) parts.push(chip(v.nameMatch, v.nameMatch ? 'name match' : 'name mismatch'));
+    if (v.minAge) parts.push(chip(v.ageOk, `${v.minAge}+ ${v.age != null ? '(' + v.age + ')' : ''}`));
+    else if (v.age != null) parts.push(chip(true, 'age ' + v.age));
+    if (v.notExpired != null) parts.push(chip(v.notExpired, v.notExpired ? 'ID valid' : 'ID expired'));
+  } else {
+    parts.push(chip(true, 'confirmed by courier'));
+  }
+  $('idResult').innerHTML = `<div class="pod-block" style="margin-top:8px;border:1px solid ${v.verified ? '#2ee6a4' : '#f87171'};border-radius:10px;padding:10px">
+    <div class="pod-label" style="color:${v.verified ? '#2ee6a4' : '#f87171'}">${v.verified ? '✓ Identity verified' : '⚠ Verify manually before completing'}</div>
+    <div style="margin-top:4px">${parts.join('')}</div></div>`;
+  $('idScanStatus').textContent = '';
+}
+async function startIdScan() {
+  const job = S.jobs.find(x => x.id === S.podJobId); if (!job) return;
+  if (!('BarcodeDetector' in window)) { $('idScanStatus').textContent = 'Barcode scan not supported here — use Photo ID.'; return; }
+  const video = $('idVideo');
+  try {
+    idStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}});
+    video.srcObject = idStream; video.hidden = false; await video.play();
+    let formats = ['pdf417'];
+    try { const supp = await BarcodeDetector.getSupportedFormats(); if (!supp.includes('pdf417')) formats = supp; } catch (e) {}
+    const detector = new BarcodeDetector({formats});
+    $('idScanStatus').textContent = 'Point at the barcode on the BACK of the ID…';
+    const tick = async () => {
+      if (!idStream) return;
+      try {
+        const codes = await detector.detect(video);
+        if (codes.length) { idv = verifyId(parseAAMVA(codes[0].rawValue), job); renderIdResult(idv, job); stopIdScan(); return; }
+      } catch (e) { /* keep trying */ }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  } catch (e) { $('idScanStatus').textContent = 'Camera unavailable — use Photo ID.'; }
+}
+function stopIdScan() {
+  if (idStream) { idStream.getTracks().forEach(t => t.stop()); idStream = null; }
+  const v = $('idVideo'); if (v) v.hidden = true;
+}
+// iOS / no-BarcodeDetector fallback: courier eyeballs the ID and confirms.
+// Privacy: the ID photo is shown transiently and NEVER stored.
+function idPhotoFallback(file) {
+  const job = S.jobs.find(x => x.id === S.podJobId);
+  const url = URL.createObjectURL(file);
+  $('idResult').innerHTML = `<div class="pod-block" style="margin-top:8px;border:1px solid var(--b2);border-radius:10px;padding:10px">
+    <img src="${url}" alt="ID" style="max-width:100%;max-height:170px;border-radius:8px;display:block">
+    <div class="hint" style="margin:6px 0">Check the ID matches the recipient${job && job.minAge ? ` and they are ${job.minAge}+` : ''}. This photo is not saved.</div>
+    <button class="btn success grow" id="idPhotoConfirm"><i class="ti ti-check"></i> Identity confirmed</button></div>`;
+  $('idPhotoConfirm').onclick = () => {
+    URL.revokeObjectURL(url);
+    idv = {method: 'photo', verified: true, manual: true, nameMatch: null, age: null, ts: new Date().toISOString()};
+    renderIdResult(idv, job);
+  };
+}
+
+/* ---------------- receipt: confirmation #, PDF, email + SMS ---------------- */
+function confirmationNumber() {
+  const co = ((S.settings.company || 'FOS').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase()) || 'FO';
+  const d = new Date(), ymd = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+  return `${co}-${ymd}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+}
+function buildReceiptPdf(job) {
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({unit: 'pt', format: 'a4'});
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 40;
+  const r = job.pod && job.pod.receipt || {};
+  let y = 54;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(20);
+  doc.text(S.settings.company || 'Futuro OS', M, y);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.setTextColor(90);
+  doc.text('Delivery Receipt', M, y + 18); doc.setTextColor(20); y += 48;
+  doc.setDrawColor(200); doc.roundedRect(M, y, W - 2 * M, 44, 6, 6);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(120);
+  doc.text('CONFIRMATION NUMBER', M + 12, y + 17);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(20);
+  doc.text(r.conf || '—', M + 12, y + 34); y += 66;
+  const row = (k, v) => { if (!v) return; doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(120); doc.text(k, M, y); doc.setTextColor(20); doc.text(String(v), M + 120, y, {maxWidth: W - 2 * M - 120}); y += 20; };
+  row('Recipient', job.customer || '—');
+  row('Address', job.address || '—');
+  row('Type', job.type || 'delivery');
+  row('Completed', job.pod && job.pod.t ? new Date(job.pod.t).toLocaleString() : '');
+  if (job.pod && job.pod.barcodes && job.pod.barcodes.length) row('Package(s)', job.pod.barcodes.join(', '));
+  if (job.pod && job.pod.lat) row('Geo-stamp', `${job.pod.lat.toFixed(5)}, ${job.pod.lng.toFixed(5)}`);
+  const v = job.pod && job.pod.idVerify;
+  if (v) {
+    y += 6; doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(20); doc.text('Identity verification', M, y); y += 15;
+    const parts = [v.verified ? 'Verified' : 'Not fully verified', v.method === 'barcode' ? 'ID barcode' : 'photo ID'];
+    if (v.nameMatch != null) parts.push(v.nameMatch ? 'name match' : 'name mismatch');
+    if (v.age != null) parts.push('age ' + v.age);
+    if (v.notExpired != null) parts.push(v.notExpired ? 'ID valid' : 'ID expired');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90); doc.text(parts.join(' · '), M, y); y += 18;
+  }
+  if (job.pod && job.pod.note) row('Note', job.pod.note);
+  if (job.pod && job.pod.signature) {
+    y += 6; doc.setFontSize(9); doc.setTextColor(120); doc.text('Signature', M, y); y += 6;
+    try { doc.addImage(job.pod.signature, 'JPEG', M, y, 180, 60); } catch (e) {} y += 72;
+  }
+  const photos = (job.pod && job.pod.photos) || [];
+  photos.slice(0, 3).forEach((p, i) => { try { doc.addImage(p, 'JPEG', M + i * 120, y, 110, 82); } catch (e) {} });
+  doc.setFontSize(8); doc.setTextColor(150);
+  doc.text(`Thank you for choosing ${S.settings.company || 'Futuro OS'}.`, M, H - 30);
+  return doc.output('blob');
+}
+function dataURLtoBlob(dataURL) {
+  const [meta, b64] = String(dataURL).split(',');
+  const mime = (meta.match(/:(.*?);/) || [])[1] || 'image/jpeg';
+  const bin = atob(b64), arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], {type: mime});
+}
+// Move base64 POD photos into Storage and keep only URLs on the job, so heavy
+// days don't bloat the synced row / localStorage. Best-effort: a failed upload
+// keeps that photo inline. Runs after the PDF is built (it needs the base64).
+async function offloadPodPhotos(job) {
+  if (!(supa && cloudUser)) return;
+  const photos = job.pod && job.pod.photos;
+  if (!Array.isArray(photos) || !photos.length || !String(photos[0]).startsWith('data:')) return;
+  const urls = [];
+  for (const p of photos) {
+    if (!String(p).startsWith('data:')) { urls.push(p); continue; }
+    try {
+      const ppath = 'photos/' + (crypto.randomUUID ? crypto.randomUUID() : 'p' + Date.now() + Math.random().toString(36).slice(2)) + '.jpg';
+      const pu = await supa.storage.from('receipts').upload(ppath, dataURLtoBlob(p), {contentType: 'image/jpeg'});
+      urls.push(pu.error ? p : supa.storage.from('receipts').getPublicUrl(ppath).data.publicUrl);
+    } catch (e) { urls.push(p); }
+  }
+  job.pod.photos = urls;
+  saveJobs();
+}
+async function issueReceipt(job) {
+  job.pod = job.pod || {};
+  job.pod.receipt = job.pod.receipt || {};
+  if (!job.pod.receipt.conf) job.pod.receipt.conf = confirmationNumber();
+  saveJobs();
+  let blob;
+  try { blob = buildReceiptPdf(job); } catch (e) { toast('Receipt PDF failed'); return; }
+  if (!(supa && cloudUser)) { job.pod.receipt.pending = true; saveJobs(); toast('Receipt saved on phone (sign in to email/text it)'); return; }
+  try {
+    const path = (crypto.randomUUID ? crypto.randomUUID() : 'r' + Date.now() + Math.random().toString(36).slice(2)) + '.pdf';
+    const up = await supa.storage.from('receipts').upload(path, blob, {contentType: 'application/pdf', upsert: false});
+    if (up.error) throw up.error;
+    const pub = supa.storage.from('receipts').getPublicUrl(path);
+    job.pod.receipt.pdfUrl = pub.data.publicUrl; job.pod.receipt.path = path; job.pod.receipt.pending = false;
+    const {data: res, error} = await supa.functions.invoke('send-receipt', {body: {
+      customerEmail: job.email || '', customerPhone: job.phone || '', customerName: job.customer || '',
+      confirmation: job.pod.receipt.conf, pdfUrl: pub.data.publicUrl, company: S.settings.company || 'Futuro OS',
+      address: job.address || '', when: job.pod.t ? new Date(job.pod.t).toLocaleString() : ''
+    }});
+    if (error) throw error;
+    job.pod.receipt.email = res && res.email; job.pod.receipt.sms = res && res.sms;
+    job.pod.receipt.configured = res && res.configured; job.pod.receipt.sentAt = Date.now();
+    saveJobs();
+    const bits = []; if (res && res.email === 'sent') bits.push('emailed'); if (res && res.sms === 'sent') bits.push('texted');
+    if (bits.length) toast('Receipt ' + bits.join(' + '));
+    else if (res && (res.email === 'not_configured' || res.sms === 'not_configured')) toast('Receipt saved · add Resend/Twilio keys to auto-send');
+    else toast('Receipt saved');
+    offloadPodPhotos(job); // slim the synced row (PDF already embedded the photos)
+  } catch (e) {
+    job.pod.receipt.pending = true; saveJobs(); toast('Receipt saved · will send when online');
+  }
+}
+function downloadReceipt(id) {
+  const j = S.jobs.find(x => x.id === id); if (!j || !j.pod) return;
+  // Prefer the hosted PDF — it has the photos embedded even after they've been
+  // offloaded to Storage URLs (which a local regenerate can't re-embed).
+  if (j.pod.receipt && j.pod.receipt.pdfUrl) { window.open(j.pod.receipt.pdfUrl, '_blank'); return; }
+  if (!j.pod.receipt) { j.pod.receipt = {conf: confirmationNumber()}; saveJobs(); }
+  try { const blob = buildReceiptPdf(j); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `receipt-${j.pod.receipt.conf}.pdf`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
+  catch (e) { toast('PDF failed'); }
+}
+async function resendReceipt(id) {
+  const j = S.jobs.find(x => x.id === id); if (!j) return;
+  toast('Sending receipt…'); await issueReceipt(j); if (S.view) openDetail(id);
+}
+
+/* ---------------- custody record — printable chain-of-custody document
+   (complements the customer receipt PDF: this is the operator/compliance
+   artifact with the full event trail, GPS stamps, and integrity hash) ---------------- */
+function custodyRecordHtml(j) {
   const s = S.settings;
   const fmtEvt = e => {
     const names = {created: 'Order created', enroute: 'Departed — en route', arrived: 'Arrived on site',
@@ -820,7 +1063,8 @@ function podReceiptHtml(j) {
     return `<tr><td>${new Date(e.t).toLocaleString()}</td><td>${esc(names[e.type] || e.type)}${e.label ? ' — ' + esc(e.label) : ''}${gps}</td></tr>`;
   };
   const p = j.pod || {};
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>POD ${esc(j.id)} — ${esc(s.company)}</title>
+  const idv2 = p.idVerify;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Custody ${esc(j.id)} — ${esc(s.company)}</title>
 <style>
 body{font-family:system-ui,sans-serif;color:#111;max-width:700px;margin:24px auto;padding:0 16px;font-size:13px;line-height:1.5}
 h1{font-size:17px;margin:0}
@@ -839,7 +1083,7 @@ img.ph{max-width:180px;max-height:180px;border:1px solid #ddd;border-radius:6px;
 </style></head><body>
 <div class="head">
   <div><div class="co">${esc(s.company)}</div><h1>Proof of Delivery — Chain of Custody Record</h1></div>
-  <div style="text-align:right">${j.secure ? '<span class="tag">SECURE DELIVERY</span><br>' : ''}<span style="font-size:11px;color:#666">Ref ${esc(j.id)}</span></div>
+  <div style="text-align:right">${j.secured ? '<span class="tag">SECURED DELIVERY</span><br>' : ''}<span style="font-size:11px;color:#666">Ref ${esc(j.id)}</span></div>
 </div>
 <table>
   <tr><td style="width:150px"><b>Status</b></td><td>${j.status === 'done' ? 'DELIVERED' : 'ATTEMPT FAILED' + (p.reason ? ' — ' + esc(p.reason) : '')}</td></tr>
@@ -848,7 +1092,9 @@ img.ph{max-width:180px;max-height:180px;border:1px solid #ddd;border-radius:6px;
   <tr><td><b>Service date</b></td><td>${esc(j.date)}${(j.winS || j.winE) ? ` (window ${j.winS || '…'}–${j.winE || '…'})` : ''}</td></tr>
   <tr><td><b>Completed</b></td><td>${p.t ? new Date(p.t).toLocaleString() : '—'}${p.lat != null ? ` @ ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}` : ''}</td></tr>
   <tr><td><b>Received by</b></td><td>${esc(p.receivedBy || '—')}</td></tr>
+  ${idv2 ? `<tr><td><b>ID verification</b></td><td>${idv2.verified ? 'VERIFIED' : 'NOT VERIFIED'}${idv2.method ? ' · ' + esc(idv2.method) : ''}${idv2.age != null ? ' · age ' + idv2.age : ''}</td></tr>` : ''}
   ${p.barcodes?.length ? `<tr><td><b>Barcodes verified</b></td><td>${p.barcodes.map(esc).join(', ')}</td></tr>` : ''}
+  ${p.receipt?.conf ? `<tr><td><b>Confirmation #</b></td><td>${esc(p.receipt.conf)}</td></tr>` : ''}
   ${p.note ? `<tr><td><b>Note</b></td><td>${esc(p.note)}</td></tr>` : ''}
 </table>
 <div class="sec">Custody timeline</div>
@@ -861,12 +1107,12 @@ ${p.hash ? `<div class="sec">Record integrity (SHA-256)</div><div class="hash">$
 <button class="noprint" onclick="print()" style="margin-top:14px;padding:10px 18px;font-size:14px;cursor:pointer">Print / Save as PDF</button>
 </body></html>`;
 }
-function openPodReceipt(id) {
+function openCustodyRecord(id) {
   const j = S.jobs.find(x => x.id === id);
   if (!j || !j.pod) return;
   const w = window.open('', '_blank');
   if (!w) { toast('Popup blocked — allow popups for this site'); return; }
-  w.document.write(podReceiptHtml(j));
+  w.document.write(custodyRecordHtml(j));
   w.document.close();
 }
 
@@ -985,8 +1231,65 @@ function attachTips(root) {
   });
 }
 
+/* ---------------- website inbox (same inbound_leads funnel the desktop reads) ---------------- */
+let inbox = [], inboxLoaded = false;
+async function fetchInbox() {
+  if (!supa || !cloudUser) { inboxLoaded = false; renderInbox(); return; }
+  try {
+    const {data, error} = await supa.from('inbound_leads')
+      .select('*').eq('status', 'new').order('created_at', {ascending: false});
+    if (!error) { inbox = data || []; inboxLoaded = true; }
+  } catch (e) { /* offline — keep whatever we had */ }
+  renderInbox();
+}
+function renderInbox() {
+  const hint = $('inboxHint'), list = $('bizInbox');
+  if (!supa || !cloudUser) {
+    hint.textContent = 'Sign in (Settings → Cloud sync) to see inquiries from your websites.';
+    list.innerHTML = '';
+    return;
+  }
+  hint.textContent = inboxLoaded
+    ? (inbox.length ? `${inbox.length} new ${inbox.length === 1 ? 'inquiry' : 'inquiries'}` : 'No new inquiries — website leads land here.')
+    : 'Loading…';
+  list.innerHTML = inbox.map(l => `
+    <div class="stop" data-id="${esc(l.id)}" style="cursor:default">
+      <div class="stop-body">
+        <div class="stop-name">${esc(l.company || l.name || '(no company)')}</div>
+        <div class="stop-addr">${esc(l.name || '')}${l.name && (l.email || l.phone) ? ' · ' : ''}${esc(l.email || '')}${l.email && l.phone ? ' · ' : ''}${esc(l.phone || '')}</div>
+        <div class="stop-meta">
+          <span class="badge status-enroute">${esc(l.source || 'website')}</span>
+          ${l.equipment ? `<span class="badge">${esc(l.equipment)}</span>` : ''}
+          ${l.lane ? `<span>${esc(l.lane)}</span>` : ''}
+        </div>
+        ${l.message ? `<div class="hint" style="margin-top:6px">${esc(l.message)}</div>` : ''}
+        <div class="row gap8" style="margin-top:10px">
+          <button class="btn small grow" data-inbox="dismiss">Dismiss</button>
+          <button class="btn small success grow" data-inbox="accept"><i class="ti ti-plus"></i> Add to pipeline</button>
+        </div>
+      </div>
+    </div>`).join('');
+  list.querySelectorAll('[data-inbox]').forEach(b => b.addEventListener('click', () =>
+    inboxAction(b.closest('.stop').dataset.id, b.dataset.inbox)));
+}
+async function inboxAction(id, action) {
+  const l = inbox.find(x => x.id === id);
+  if (!l) return;
+  if (action === 'accept') {
+    S.deals.push({id: Date.now() + Math.random(), type: 'web',
+      title: (l.company || l.name || 'Website lead') + (l.lane ? ' — ' + l.lane : ''), value: 0, stage: 'lead'});
+    saveDeals();
+  }
+  try { await supa.from('inbound_leads').update({status: action === 'accept' ? 'accepted' : 'dismissed'}).eq('id', id); }
+  catch (e) { toast('Offline — will remain in inbox'); return; }
+  inbox = inbox.filter(x => x.id !== id);
+  renderInbox();
+  if (action === 'accept') { renderBiz(); toast('Added to pipeline'); }
+}
+
 /* ---------------- BIZ (pipeline + SAM.gov) ---------------- */
 function renderBiz() {
+  renderInbox();
   ['lead', 'active', 'closed'].forEach(st => { $(st).innerHTML = ''; });
   if ($('apiKey').value === '' && S.settings.samKey) $('apiKey').value = S.settings.samKey;
   S.deals.forEach(d => {
@@ -1039,6 +1342,12 @@ function loadSettingsForm() {
   $('sNav').value = s.navApp;
   $('sTmplWay').value = s.tmplWay; $('sTmplArr').value = s.tmplArr; $('sTmplDone').value = s.tmplDone;
   $('sWebhook').value = s.webhookUrl; $('sSamKey').value = s.samKey;
+  // app lock
+  $('sLockMins').value = localStorage.getItem('fos.lockMins') || '0';
+  $('lockStatus').textContent = hasPin() ? 'PIN is set — the app locks when idle.' : 'No PIN set — anyone with this phone can open the app.';
+  $('btnRemovePin').hidden = !hasPin();
+  $('btnLockNow').hidden = !hasPin();
+  $('btnSetPin').innerHTML = hasPin() ? '<i class="ti ti-lock-cog"></i> Change PIN' : '<i class="ti ti-lock-cog"></i> Set PIN';
 }
 async function saveSettingsForm() {
   const s = S.settings;
@@ -1051,6 +1360,7 @@ async function saveSettingsForm() {
   s.navApp = $('sNav').value;
   s.tmplWay = $('sTmplWay').value; s.tmplArr = $('sTmplArr').value; s.tmplDone = $('sTmplDone').value;
   s.webhookUrl = $('sWebhook').value.trim(); s.samKey = $('sSamKey').value.trim();
+  localStorage.setItem('fos.lockMins', $('sLockMins').value);
   if (homeChanged && s.homeAddress) {
     try { const g = await geocode(s.homeAddress); s.homeLat = g.lat; s.homeLng = g.lng;
       $('homeGeoStatus').textContent = `📍 ${g.label}`; }
@@ -1085,17 +1395,29 @@ let supa = null, cloudUser = null, _cloudTimer = null, _cloudApplying = false;
 function initCloud() {
   if (!window.supabase) { updateCloudUi(); return; } // CDN unreachable → local-only mode
   supa = window.supabase.createClient(FF_SUPABASE_URL, FF_SUPABASE_KEY);
-  supa.auth.getSession().then(({data}) => {
-    if (data && data.session) { cloudUser = data.session.user; updateCloudUi(); pullCloud(); }
-    else updateCloudUi();
+  supa.auth.getSession().then(async ({data}) => {
+    if (data && data.session) {
+      cloudUser = data.session.user; updateCloudUi();
+      await pullCloud();     // deals/settings (+ one-time carry-over of old inline jobs)
+      await pullJobs();      // authoritative jobs from the shared table
+      subscribeJobs();       // live updates from the desktop Deliveries page
+      fetchInbox();
+    } else updateCloudUi();
   }).catch(() => updateCloudUi());
 }
-const cloudState = () => ({schema: 1, jobs: S.jobs, deals: S.deals, settings: S.settings, savedAt: Date.now()});
+// mobile_snapshot now carries only deals + settings; JOBS live in the shared
+// `jobs` table (see below) so the desktop Deliveries surface and the phone
+// read/write one list.
+const cloudState = () => ({schema: 2, deals: S.deals, settings: S.settings, savedAt: Date.now()});
 function applyCloudState(d) {
-  if (!d || !Array.isArray(d.jobs)) return false;
+  if (!d) return false;
   _cloudApplying = true;
   try {
-    S.jobs = d.jobs; saveJobs();
+    // one-time migration: old snapshots stored jobs inline — carry them over
+    // once so they can be pushed into the shared jobs table by pullJobs().
+    if (Array.isArray(d.jobs) && d.jobs.length && !S.jobs.length) {
+      S.jobs = d.jobs; localStorage.setItem('fos.jobs', JSON.stringify(S.jobs));
+    }
     if (Array.isArray(d.deals)) { S.deals = d.deals; saveDeals(); }
     if (d.settings) { S.settings = Object.assign({}, DEFAULT_SETTINGS, d.settings); saveSettings(); }
     if (d.savedAt) localStorage.setItem('fos.savedAt', String(d.savedAt));
@@ -1111,8 +1433,7 @@ async function pullCloud() {
     const localAt = +(localStorage.getItem('fos.savedAt') || 0);
     if (row && row.data && (row.data.savedAt || 0) > localAt) {
       applyCloudState(row.data);
-      render(); loadSettingsForm();
-      toast('Cloud data loaded');
+      loadSettingsForm();
       updateCloudUi();
     } else {
       pushCloud(); // no cloud row yet, or this phone is newer
@@ -1136,6 +1457,92 @@ function queueCloudSave() {
   clearTimeout(_cloudTimer);
   _cloudTimer = setTimeout(pushCloud, 800);
 }
+
+/* ------- shared jobs table (two-way sync with the desktop Deliveries page) ------- */
+let _jobTimer = null, _jobsChannel = null, _rtTimer = null;
+function jobToRow(j) {
+  return {
+    id: j.id, owner: cloudUser.id, type: j.type || 'delivery', customer: j.customer || null,
+    phone: j.phone || null, email: j.email || null, address: j.address || null,
+    lat: j.lat ?? null, lng: j.lng ?? null, job_date: j.date || null,
+    win_s: j.winS || null, win_e: j.winE || null, rate: j.rate ?? null,
+    status: j.status || 'pending', notes: j.notes || null, barcode_required: j.barcodeRequired || null,
+    secured: !!j.secured, min_age: j.minAge || null, seq: j.seq ?? null,
+    events: j.events || [], pod: j.pod || null, source: j.source || 'mobile',
+    updated_at: new Date().toISOString()
+  };
+}
+function rowToJob(r) {
+  return {
+    id: r.id, type: r.type || 'delivery', customer: r.customer || '', phone: r.phone || '',
+    email: r.email || '', address: r.address || '', lat: r.lat, lng: r.lng, date: r.job_date || '',
+    winS: r.win_s || '', winE: r.win_e || '', rate: +r.rate || 0, status: r.status || 'pending',
+    notes: r.notes || '', barcodeRequired: r.barcode_required || '', secured: !!r.secured,
+    minAge: r.min_age || 0, seq: r.seq ?? 0, events: r.events || [], pod: r.pod || null,
+    source: r.source || 'desktop', _u: r.updated_at
+  };
+}
+async function pullJobs() {
+  if (!supa || !cloudUser) return;
+  try {
+    const {data, error} = await supa.from('jobs').select('*').eq('owner', cloudUser.id);
+    if (error) { console.warn('pullJobs:', error.message); return; }
+    const rows = data || [];
+    if (!rows.length) { if (S.jobs.length) pushAllJobs(); return; } // seed cloud from this phone
+    // server rows are authoritative for their id; keep local-only (offline) jobs.
+    const seen = new Set();
+    const merged = rows.map(r => { seen.add(r.id); return rowToJob(r); });
+    const localOnly = S.jobs.filter(j => !seen.has(j.id));
+    localOnly.forEach(j => merged.push(j));
+    _cloudApplying = true;
+    try { S.jobs = merged; localStorage.setItem('fos.jobs', JSON.stringify(S.jobs)); }
+    finally { _cloudApplying = false; }
+    if (localOnly.length) localOnly.forEach(pushJob); // push offline-created jobs up
+    render();
+  } catch (e) { /* offline — keep local */ }
+}
+async function pushAllJobs() {
+  if (!supa || !cloudUser || !S.jobs.length) return;
+  try { await supa.from('jobs').upsert(S.jobs.map(jobToRow), {onConflict: 'id'}); }
+  catch (e) { /* offline — retry on next save */ }
+}
+async function pushJob(job) {
+  if (!supa || !cloudUser) return;
+  try { await supa.from('jobs').upsert([jobToRow(job)], {onConflict: 'id'}); } catch (e) {}
+}
+async function deleteJobRow(id) {
+  if (!supa || !cloudUser) return;
+  try { await supa.from('jobs').delete().eq('id', id).eq('owner', cloudUser.id); } catch (e) {}
+}
+// Mirror a delivery window to Google Calendar (best-effort; dormant until the
+// Google Apps Script bridge + secrets are set — see integrations/google-apps-script).
+async function syncCalendar(j, remove) {
+  if (!supa || !cloudUser || (!j || (!j.date && !remove))) return;
+  try {
+    await supa.functions.invoke('sync-calendar', {body: {
+      id: j.id, customer: j.customer, address: j.address,
+      job_date: j.date, win_s: j.winS, win_e: j.winE, type: j.type, remove: !!remove
+    }});
+  } catch (e) {}
+}
+function queueJobSync() {
+  if (_cloudApplying) return;
+  if (!supa || !cloudUser) return;
+  clearTimeout(_jobTimer);
+  _jobTimer = setTimeout(pushAllJobs, 800);
+}
+function subscribeJobs() {
+  if (!supa || !cloudUser || _jobsChannel) return;
+  try {
+    _jobsChannel = supa.channel('jobs-' + cloudUser.id)
+      .on('postgres_changes', {event: '*', schema: 'public', table: 'jobs', filter: 'owner=eq.' + cloudUser.id},
+        () => { clearTimeout(_rtTimer); _rtTimer = setTimeout(pullJobs, 400); })
+      .subscribe();
+  } catch (e) {}
+}
+function unsubscribeJobs() {
+  if (_jobsChannel) { try { supa.removeChannel(_jobsChannel); } catch (e) {} _jobsChannel = null; }
+}
 function updateCloudUi(err) {
   const dot = $('cloudDot'), st = $('cloudStatus'), auth = $('btnCloudAuth'), push = $('btnCloudPush');
   const on = !!(supa && cloudUser);
@@ -1153,6 +1560,7 @@ function updateCloudUi(err) {
 async function cloudAuthClick() {
   if (!window.supabase) { toast('Cloud unavailable — check connection'); return; }
   if (cloudUser) {
+    unsubscribeJobs();
     await supa.auth.signOut().catch(() => {});
     cloudUser = null;
     updateCloudUi();
@@ -1176,13 +1584,76 @@ async function doAuth(signup) {
       cloudUser = (data.session && data.session.user) || data.user;
       $('authSheet').hidden = true;
       updateCloudUi();
-      pullCloud();
+      await pullCloud();
+      await pullJobs();
+      subscribeJobs();
+      fetchInbox();
       toast('Signed in — cloud sync on');
     } else {
       st.textContent = 'Account created. If email confirmation is on, check your inbox, then Sign in.';
     }
   } catch (e) { st.textContent = 'Network error — try again.'; }
 }
+
+/* ---------------- app lock (4-digit PIN) ---------------- */
+const LOCK = {entry: '', mode: 'unlock', firstPin: '', locked: false};
+let _bgAt = 0;
+async function sha(s) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function pinSalt() {
+  let s = localStorage.getItem('fos.pinSalt');
+  if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('fos.pinSalt', s); }
+  return s;
+}
+const hasPin = () => !!localStorage.getItem('fos.pinHash');
+function buildKeypad() {
+  const kp = $('keypad'); if (!kp) return;
+  kp.innerHTML = ['1','2','3','4','5','6','7','8','9','','0','⌫']
+    .map(k => k === '' ? '<button class="blank"></button>' : `<button data-k="${k}">${k}</button>`).join('');
+  kp.querySelectorAll('button[data-k]').forEach(b => b.addEventListener('click', () => lockKey(b.dataset.k)));
+}
+function renderDots() {
+  const n = LOCK.entry.length;
+  $('lockDots').innerHTML = Array.from({length: 4}, (_, i) => `<span class="${i < n ? 'on' : ''}"></span>`).join('');
+}
+async function lockKey(k) {
+  $('lockMsg').textContent = '';
+  if (k === '⌫') { LOCK.entry = LOCK.entry.slice(0, -1); renderDots(); return; }
+  if (LOCK.entry.length >= 4) return;
+  LOCK.entry += k; renderDots();
+  if (LOCK.entry.length < 4) return;
+  if (LOCK.mode === 'unlock') {
+    const ok = (await sha(pinSalt() + LOCK.entry)) === localStorage.getItem('fos.pinHash');
+    if (ok) { LOCK.entry = ''; hideLock(); }
+    else { $('lockMsg').textContent = 'Wrong PIN'; LOCK.entry = ''; renderDots(); if (navigator.vibrate) navigator.vibrate(120); }
+  } else if (LOCK.mode === 'set') {
+    LOCK.firstPin = LOCK.entry; LOCK.entry = ''; LOCK.mode = 'confirm';
+    $('lockTitle').textContent = 'Confirm PIN'; $('lockSub').textContent = 'Re-enter to confirm'; renderDots();
+  } else if (LOCK.mode === 'confirm') {
+    if (LOCK.entry === LOCK.firstPin) { await savePin(LOCK.firstPin); }
+    else { $('lockMsg').textContent = "PINs didn't match"; LOCK.entry = ''; LOCK.firstPin = ''; LOCK.mode = 'set';
+      $('lockTitle').textContent = 'Enter new PIN'; renderDots(); }
+  }
+}
+async function savePin(pin) {
+  localStorage.setItem('fos.pinHash', await sha(pinSalt() + pin));
+  LOCK.entry = ''; LOCK.firstPin = ''; LOCK.mode = 'unlock';
+  hideLock(); toast('PIN set — app locks when idle'); loadSettingsForm();
+}
+function showLock(mode) {
+  LOCK.mode = mode || 'unlock'; LOCK.entry = ''; LOCK.firstPin = ''; LOCK.locked = true;
+  const setting = LOCK.mode !== 'unlock';
+  $('lockTitle').textContent = setting ? 'Enter new PIN' : 'Enter PIN';
+  $('lockSub').textContent = setting ? 'Choose a 4-digit PIN' : 'Futuro OS is locked';
+  $('lockMsg').textContent = '';
+  $('lockCancel').hidden = !setting;
+  buildKeypad(); renderDots();
+  $('lockScreen').hidden = false;
+}
+function hideLock() { LOCK.locked = false; $('lockScreen').hidden = true; }
+function lockNow() { if (hasPin()) showLock('unlock'); }
 
 /* ---------------- install (Android one-tap prompt / iOS Share instructions) ---------------- */
 let deferredInstall = null;
@@ -1216,7 +1687,7 @@ function wire() {
   document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => show(t.dataset.view)));
   document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => {
     $(b.dataset.close).hidden = true;
-    if (b.dataset.close === 'podSheet') stopScan();
+    if (b.dataset.close === 'podSheet') { stopScan(); stopIdScan(); }
   }));
   // Today
   $('dayPick').addEventListener('change', e => { S.date = e.target.value; render(); });
@@ -1235,14 +1706,20 @@ function wire() {
   $('btnSaveJob').addEventListener('click', () => saveJob().catch(e => toast('Save failed: ' + e.message)));
   $('btnDeleteJob').addEventListener('click', () => {
     if (!confirm('Delete this job?')) return;
-    S.jobs = S.jobs.filter(j => j.id !== S.editingId);
-    saveJobs(); $('jobSheet').hidden = true; render();
+    const delId = S.editingId;
+    const delJob = S.jobs.find(j => j.id === delId);
+    S.jobs = S.jobs.filter(j => j.id !== delId);
+    saveJobs(); deleteJobRow(delId); if (delJob) syncCalendar(delJob, true); $('jobSheet').hidden = true; render();
   });
   // POD
   $('podPhoto').addEventListener('change', e => { if (e.target.files[0]) addPodPhoto(e.target.files[0]); e.target.value = ''; });
   $('sigClear').addEventListener('click', () => { pod.drawn = false; $('sigStatus').textContent = ''; initSigPad(); });
   $('btnScan').addEventListener('click', startScan);
   $('podBarcodeIn').addEventListener('keydown', e => { if (e.key === 'Enter') registerBarcode(e.target.value.trim()); });
+  // Secured-delivery ID verification
+  $('jSecured').addEventListener('change', e => { $('jMinAgeWrap').hidden = !e.target.checked; });
+  $('btnIdScan').addEventListener('click', startIdScan);
+  $('idPhoto').addEventListener('change', e => { if (e.target.files[0]) idPhotoFallback(e.target.files[0]); e.target.value = ''; });
   $('btnPodComplete').addEventListener('click', () => finishPod(false));
   $('btnPodFail').addEventListener('click', () => finishPod(true));
   // Stats
@@ -1253,6 +1730,7 @@ function wire() {
     renderStats();
   }));
   // Biz
+  $('btnInboxRefresh').addEventListener('click', fetchInbox);
   $('btnGov').addEventListener('click', loadGov);
   $('btnAddDeal').addEventListener('click', () => {
     const t = $('dealTitle').value.trim();
@@ -1274,8 +1752,23 @@ function wire() {
   $('btnSignup').addEventListener('click', () => doAuth(true));
   $('authPass').addEventListener('keydown', e => { if (e.key === 'Enter') doAuth(false); });
   // Settings
+  // (btnDesktop is a plain <a href="../"> in the app bar — no JS, so it still
+  //  works even if this script is served stale from cache.)
   $('btnSettings').addEventListener('click', () => { loadSettingsForm(); $('settingsSheet').hidden = false; });
   $('btnSaveSettings').addEventListener('click', () => saveSettingsForm());
+  // App lock
+  $('btnSetPin').addEventListener('click', () => { $('settingsSheet').hidden = true; showLock('set'); });
+  $('btnRemovePin').addEventListener('click', () => { if (confirm('Remove the PIN lock?')) { localStorage.removeItem('fos.pinHash'); toast('PIN removed'); loadSettingsForm(); } });
+  $('btnLockNow').addEventListener('click', () => { $('settingsSheet').hidden = true; lockNow(); });
+  $('sLockMins').addEventListener('change', () => localStorage.setItem('fos.lockMins', $('sLockMins').value));
+  $('lockCancel').addEventListener('click', () => { if (LOCK.mode !== 'unlock') hideLock(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { _bgAt = Date.now(); }
+    else if (hasPin() && !LOCK.locked) {
+      const mins = +(localStorage.getItem('fos.lockMins') || '0');
+      if (_bgAt && Date.now() - _bgAt >= mins * 60000) showLock('unlock');
+    }
+  });
   $('btnGeoHome').addEventListener('click', geocodeHome);
   $('btnExport').addEventListener('click', exportJson);
   $('importFile').addEventListener('change', e => { if (e.target.files[0]) importJson(e.target.files[0]); });
@@ -1291,13 +1784,28 @@ function shiftDay(delta) {
 /* ---------------- init ---------------- */
 wire();
 $('brandSub').textContent = 'Mobile Ops — ' + S.settings.company;
+if (hasPin()) showLock('unlock');   // require PIN before the app is usable
 show('today');
 startGps();
 initCloud();
 updateInstallUi();
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  // When a NEW service worker takes control (sw.js does skipWaiting + claim),
+  // reload once so the user lands on the fresh build instead of having to close
+  // and reopen the app. Guarded on there having been a previous controller, so
+  // the very first install doesn't trigger a pointless reload, and on a flag so
+  // it can't loop.
+  const _hadController = !!navigator.serviceWorker.controller;
+  let _swRefreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!_hadController || _swRefreshing) return;
+    _swRefreshing = true;
+    location.reload();
+  });
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 // expose a couple of handlers used from generated HTML
 window.show = show;
 window.openJobSheet = openJobSheet;
+window.downloadReceipt = downloadReceipt;
+window.resendReceipt = resendReceipt;

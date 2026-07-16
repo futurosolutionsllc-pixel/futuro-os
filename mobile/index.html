@@ -19,8 +19,38 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="styles.css">
+<style>
+  .lock-screen{position:fixed;inset:0;z-index:9999;background:#06080f;display:flex;align-items:center;justify-content:center;padding:24px}
+  /* author display:flex beats the UA [hidden]{display:none}, so restate it or
+     the overlay never goes away and covers the whole app (same rule .sheet uses) */
+  .lock-screen[hidden]{display:none}
+  .lock-card{width:100%;max-width:320px;text-align:center}
+  .lock-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin:12px 0 4px;color:var(--t1,#e9ecf1)}
+  .lock-sub{font-size:12px;color:var(--t3,#5f6877);margin-bottom:22px}
+  .lock-dots{display:flex;gap:12px;justify-content:center;margin:18px 0;min-height:16px}
+  .lock-dots span{width:14px;height:14px;border-radius:50%;border:2px solid var(--b2,rgba(255,255,255,.2))}
+  .lock-dots span.on{background:var(--hgreen,#2ee6a4);border-color:var(--hgreen,#2ee6a4)}
+  .lock-msg{font-size:12px;color:var(--crit,#f87171);min-height:16px;margin-bottom:10px}
+  .keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:6px}
+  .keypad button{aspect-ratio:1;border-radius:50%;border:1px solid var(--b2,rgba(255,255,255,.14));background:var(--bg4,rgba(255,255,255,.04));color:var(--t1,#e9ecf1);font-size:22px;font-weight:600;cursor:pointer;font-family:inherit}
+  .keypad button:active{background:var(--hgreen,#2ee6a4);color:#06080f}
+  .keypad button.blank{background:transparent;border:none;pointer-events:none}
+</style>
 </head>
 <body>
+
+<!-- ============ APP LOCK (PIN) ============ -->
+<div id="lockScreen" class="lock-screen" hidden>
+  <div class="lock-card">
+    <i class="ti ti-lock" style="font-size:30px;color:var(--hgreen,#2ee6a4)"></i>
+    <div class="lock-title" id="lockTitle">Enter PIN</div>
+    <div class="lock-sub" id="lockSub">Futuro OS is locked</div>
+    <div class="lock-dots" id="lockDots"></div>
+    <div class="lock-msg" id="lockMsg"></div>
+    <div class="keypad" id="keypad"></div>
+    <button id="lockCancel" hidden style="margin-top:16px;background:transparent;border:none;color:var(--t3,#5f6877);font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
+  </div>
+</div>
 
 <header class="appbar">
   <div class="brand">
@@ -30,7 +60,7 @@
   <div class="appbar-actions">
     <i id="cloudDot" class="ti ti-cloud-off cloud-dot" title="Cloud sync off"></i>
     <span id="gpsDot" class="gps-dot off" title="GPS status"></span>
-    <a class="icon-btn" id="btnDesktop" href="../" target="_blank" rel="noopener" aria-label="Open Futuro OS desktop" style="display:grid;place-items:center;text-decoration:none"><i class="ti ti-device-desktop"></i></a>
+    <a class="icon-btn" id="btnDesktop" href="../" target="_blank" rel="noopener" aria-label="Open Futuro OS desktop" title="Open Futuro OS desktop" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none"><i class="ti ti-device-desktop"></i></a>
     <button class="icon-btn" id="btnSettings" aria-label="Settings"><i class="ti ti-settings"></i></button>
   </div>
 </header>
@@ -109,6 +139,12 @@
   <!-- ============ BIZ (pipeline + govcon) ============ -->
   <section id="view-biz" class="view">
     <div class="card">
+      <h2>Website inbox</h2>
+      <div class="hint" id="inboxHint"></div>
+      <div id="bizInbox" class="stop-list" style="margin-top:8px"></div>
+      <button class="btn small" id="btnInboxRefresh" style="margin-top:8px"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div class="card">
       <h2>GovCon (live SAM.gov)</h2>
       <div class="row gap8">
         <input id="apiKey" class="input grow" placeholder="SAM.gov API key">
@@ -158,6 +194,7 @@
     </label>
     <label>Customer name <input id="jName" class="input" placeholder="Jane Smith"></label>
     <label>Phone <input id="jPhone" class="input" inputmode="tel" placeholder="+1 555 0100"></label>
+    <label>Customer email <input id="jEmail" class="input" type="email" inputmode="email" placeholder="jane@example.com — for receipt"></label>
     <label>Address
       <div class="row gap8">
         <input id="jAddress" class="input grow" placeholder="Street, City, ST — or lat,lng">
@@ -174,10 +211,16 @@
       <label class="grow">Rate ($) <input id="jRate" type="number" class="input" placeholder="0"></label>
       <label class="grow">Required barcode <input id="jBarcode" class="input" placeholder="optional"></label>
     </div>
-    <label class="check-row"><input type="checkbox" id="jSecure">
-      <span><i class="ti ti-shield-lock"></i> Secure delivery — enforce full chain of custody (photo + signature + recipient name required)</span>
-    </label>
     <label>Notes <textarea id="jNotes" class="input" rows="2"></textarea></label>
+    <div class="pod-block" style="margin:2px 0 6px">
+      <label class="row gap8" style="align-items:center;cursor:pointer;margin:0">
+        <input type="checkbox" id="jSecured" style="width:20px;height:20px;flex:none">
+        <span><i class="ti ti-shield-lock"></i> Secured delivery — verify recipient ID</span>
+      </label>
+      <label id="jMinAgeWrap" hidden style="margin-top:8px">Minimum age (optional, for age-restricted)
+        <input id="jMinAge" type="number" class="input" placeholder="e.g. 21" inputmode="numeric">
+      </label>
+    </div>
     <div class="row gap8">
       <button class="btn danger" id="btnDeleteJob" hidden>Delete</button>
       <button class="btn primary grow" id="btnSaveJob">Save job</button>
@@ -224,6 +267,19 @@
       <div id="podBarcodes" class="hint"></div>
     </div>
 
+    <div class="pod-block" id="podIdBlock" hidden>
+      <div class="pod-label"><i class="ti ti-id-badge-2"></i> Recipient ID verification <span class="hint" id="podIdReq"></span></div>
+      <div class="row gap8">
+        <button class="btn grow" id="btnIdScan"><i class="ti ti-scan"></i> Scan ID barcode</button>
+        <label class="btn file-btn" id="btnIdPhotoWrap"><i class="ti ti-camera"></i>&nbsp;Photo ID
+          <input type="file" id="idPhoto" accept="image/*" capture="environment" hidden>
+        </label>
+      </div>
+      <video id="idVideo" hidden playsinline></video>
+      <div class="hint" id="idScanStatus"></div>
+      <div id="idResult"></div>
+    </div>
+
     <label>Received by (name) <input id="podRecvName" class="input" placeholder="Who accepted the delivery" autocomplete="off"></label>
     <label>Note <input id="podNote" class="input" placeholder="Left at front desk…"></label>
 
@@ -261,6 +317,24 @@
         <button class="btn grow" id="btnCloudPush" hidden><i class="ti ti-cloud-up"></i> Sync now</button>
       </div>
       <div class="hint" style="margin-top:8px"><a href="../" target="_blank" rel="noopener" style="color:var(--tgreen)">Open Futuro OS desktop →</a></div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <h3>App lock</h3>
+      <div class="hint" id="lockStatus">No PIN set — anyone with this phone can open the app.</div>
+      <label style="margin-top:8px">Auto-lock after
+        <select id="sLockMins" class="input">
+          <option value="0">Immediately (every open)</option>
+          <option value="2">2 minutes</option>
+          <option value="5">5 minutes</option>
+          <option value="15">15 minutes</option>
+          <option value="60">1 hour</option>
+        </select>
+      </label>
+      <div class="row gap8" style="margin-top:8px">
+        <button class="btn grow" id="btnSetPin"><i class="ti ti-lock-cog"></i> Set / change PIN</button>
+        <button class="btn grow" id="btnRemovePin" hidden><i class="ti ti-lock-open"></i> Remove PIN</button>
+      </div>
+      <button class="btn grow" id="btnLockNow" style="margin-top:8px" hidden><i class="ti ti-lock"></i> Lock now</button>
     </div>
     <label>Company name <input id="sCompany" class="input"></label>
     <label>Your phone <input id="sPhone" class="input" inputmode="tel"></label>
@@ -322,6 +396,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
