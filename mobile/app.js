@@ -2242,20 +2242,168 @@ Store.init().then(async () => {
     toast('⚠ Local data was unreadable — working in recovery mode');
   }
 }).catch(() => {});
+/* ---------------- controlled service-worker updates (P0-D) ----------------
+   An app update must never reload during active or unsaved work, activate a
+   partial cache, or strand the user offline. sw.js installs the new build
+   atomically and then WAITS. This coordinator detects the waiting worker, shows a
+   single non-blocking prompt, and — only on explicit approval — forces a P0-C
+   durability flush, tells the worker to activate, and reloads exactly once. If the
+   flush cannot be confirmed, activation is refused and the current version stays
+   live. Reload is armed only for our own approved activation, so an unrelated
+   controllerchange (e.g. a sibling tab, or first install) never auto-reloads. */
+
+// P0-C durability-flush contract for update approval. Returns Promise<boolean>:
+// true only when the live in-memory state was safely persisted to the durable tier.
+// In protective/recovery mode (_localTrusted === false) the in-memory state is an
+// empty placeholder, so we must NOT flush (it would clobber good durable data) and
+// must NOT report success — the caller then refuses to activate and keeps the
+// current version. Reuses Store.flush + Store.lastWriteOk (the real P0-C API), not a
+// second save system, and never touches auth UID/epoch scope (Store.flush is
+// scope-local by construction).
+function _durableFlushForUpdate() {
+  if (!_localTrusted) return Promise.resolve(false);
+  let chain;
+  try { chain = Store.flush(S); }                       // sync localStorage write + kick IDB mirror
+  catch (e) { return Promise.resolve(false); }
+  const check = () => Store.lastWriteOk() !== false;    // the synchronous local write must have held
+  return Promise.resolve(chain).then(check, check);
+}
+
+/* @p0d-coordinator-start (extracted verbatim by FuturoFreight_Test_Harnesses/p0d-harness.html) */
+function _createSwUpdate(deps) {
+  const container = deps.container;                 // ServiceWorkerContainer (real or mocked)
+  const getController = deps.getController;         // () => current controller worker or null
+  const durableFlush = deps.durableFlush;           // () => Promise<boolean> (P0-C flush + confirm)
+  const reload = deps.reload;                       // () => void
+  const session = deps.session;                     // sessionStorage-like (may be null)
+  const ui = deps.ui;                               // { show(v), hide(), status(msg, isError) }
+  const RELOAD_TIMEOUT = deps.reloadTimeout || 8000;
+  const ACT_KEY = 'fos.swActivated';                // version we drove to activation (survives reload)
+
+  let pendingWorker = null, pendingVersion = null;
+  let promptedVersion = null;                        // dedupe: one prompt per version per session
+  let approving = false, reloadArmed = false, reloaded = false, reloadTimer = null;
+
+  // Ask a worker its version over a MessageChannel (bounded; null on timeout/failure).
+  function versionOf(worker) {
+    return new Promise(res => {
+      if (!worker || !worker.postMessage) return res(null);
+      let done = false;
+      const finish = v => { if (!done) { done = true; res(v); } };
+      const to = setTimeout(() => finish(null), 2000);
+      let ch;
+      try { ch = new MessageChannel(); } catch (e) { clearTimeout(to); return res(null); }
+      ch.port1.onmessage = ev => { clearTimeout(to); finish((ev.data && ev.data.version) || null); };
+      try { worker.postMessage({ type: 'GET_VERSION' }, [ch.port2]); }
+      catch (e) { clearTimeout(to); finish(null); }
+    });
+  }
+
+  async function maybePrompt(worker) {
+    if (!worker) return;
+    // An UPDATE only exists when a worker already controls this page; the very first
+    // install has no controller and must never surface an update prompt.
+    if (!getController()) return;
+    const v = (await versionOf(worker)) || 'pending';
+    if (promptedVersion === v) return;                          // already prompting this version
+    if (session && session.getItem(ACT_KEY) === v) return;      // already activated -> reloaded page
+    promptedVersion = v; pendingWorker = worker; pendingVersion = v;
+    ui.show(v);
+  }
+
+  async function approve() {
+    if (approving || reloaded) return false;
+    approving = true;
+    ui.status('Saving your work…', false);
+    let ok = false;
+    try { ok = await durableFlush(); } catch (e) { ok = false; }
+    if (!ok) {
+      approving = false;
+      ui.status('Couldn’t save locally — staying on the current version.', true);
+      return false;                                             // refuse activation; keep current version
+    }
+    // Record intent BEFORE activating so a reload can't re-drive the same version (loop guard).
+    if (session) { try { session.setItem(ACT_KEY, pendingVersion); } catch (e) {} }
+    reloadArmed = true;
+    ui.status('Updating…', false);
+    try { pendingWorker.postMessage({ type: 'SKIP_WAITING', version: pendingVersion }); } catch (e) {}
+    // Bounded recovery: if the new worker never takes control, don't hang or loop.
+    reloadTimer = setTimeout(() => {
+      if (reloaded) return;
+      reloadArmed = false; approving = false;
+      ui.status('Update ready — reload when you’re done to finish.', false);
+    }, RELOAD_TIMEOUT);
+    return true;
+  }
+
+  function later() { ui.hide(); }   // session-only dismissal; the prompt returns next launch
+
+  function onControllerChange() {
+    if (reloaded) return;
+    if (!reloadArmed) return;         // never auto-reload on an activation we didn't approve
+    reloaded = true;
+    clearTimeout(reloadTimer);
+    reload();
+  }
+
+  function attach(registration) {
+    if (!registration) return;
+    // A worker that finished installing in a prior session and is still waiting now.
+    if (registration.waiting) maybePrompt(registration.waiting);
+    registration.addEventListener('updatefound', () => {
+      const nw = registration.installing;
+      if (!nw) return;
+      nw.addEventListener('statechange', () => {
+        if (nw.state === 'installed') maybePrompt(nw);
+      });
+    });
+  }
+
+  if (container && container.addEventListener) {
+    container.addEventListener('controllerchange', onControllerChange);
+  }
+
+  return {
+    attach, maybePrompt, approve, later, onControllerChange,
+    get state() { return { pendingVersion, promptedVersion, approving, reloadArmed, reloaded }; }
+  };
+}
+/* @p0d-coordinator-end */
+
+// Real update UI (thin DOM adapter over the inline #swUpdate bar in index.html).
+const _swUpdateUi = {
+  show() {
+    const bar = $('swUpdate'); if (!bar) return;
+    const msg = $('swUpdateMsg'); if (msg) msg.textContent = 'App update ready.';
+    bar.classList.remove('is-error');
+    bar.hidden = false;
+  },
+  hide() { const bar = $('swUpdate'); if (bar) bar.hidden = true; },
+  status(text, isError) {
+    const msg = $('swUpdateMsg'); if (msg) msg.textContent = text;
+    const bar = $('swUpdate'); if (bar) bar.classList.toggle('is-error', !!isError);
+  }
+};
+
+// Expose the real factory + flush for the external P0-D regression harness (drives
+// the real coordinator/durability code with mocked worker/cache/session deps).
+window.__fosSWUpdate = { create: _createSwUpdate, durableFlush: _durableFlushForUpdate };
+
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-  // When a NEW service worker takes control (sw.js does skipWaiting + claim),
-  // reload once so the user lands on the fresh build instead of having to close
-  // and reopen the app. Guarded on there having been a previous controller, so
-  // the very first install doesn't trigger a pointless reload, and on a flag so
-  // it can't loop.
-  const _hadController = !!navigator.serviceWorker.controller;
-  let _swRefreshing = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!_hadController || _swRefreshing) return;
-    _swRefreshing = true;
-    location.reload();
+  const _swUpdate = _createSwUpdate({
+    container: navigator.serviceWorker,
+    getController: () => navigator.serviceWorker.controller,
+    durableFlush: _durableFlushForUpdate,
+    reload: () => location.reload(),
+    session: (() => { try { return window.sessionStorage; } catch (e) { return null; } })(),
+    ui: _swUpdateUi
   });
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  const _now = $('swUpdateNow'), _later = $('swUpdateLater');
+  if (_now) _now.addEventListener('click', () => _swUpdate.approve());
+  if (_later) _later.addEventListener('click', () => _swUpdate.later());
+  navigator.serviceWorker.register('sw.js')
+    .then(reg => _swUpdate.attach(reg))
+    .catch(() => { toast('Update check unavailable — the app still works offline.'); });
 }
 // expose a couple of handlers used from generated HTML
 window.show = show;
