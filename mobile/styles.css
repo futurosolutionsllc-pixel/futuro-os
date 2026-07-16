@@ -266,6 +266,22 @@ details.table-view summary{font-size:12px;color:var(--t3);cursor:pointer;margin-
   padding:10px 18px;border-radius:99px;font-size:13px;max-width:90vw;
 }
 
+/* Controlled PWA update prompt (P0-D). Fixed, non-blocking, phone-width safe;
+   sits above the bottom nav and respects the safe-area inset. */
+.sw-update{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(76px + env(safe-area-inset-bottom));z-index:960;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between;
+  width:min(92vw,440px);box-sizing:border-box;
+  background:var(--panel-solid);border:1px solid rgba(96,232,182,.3);border-radius:14px;
+  padding:12px 14px;box-shadow:0 10px 34px rgba(0,0,0,.5),0 0 22px rgba(34,211,155,.12);
+}
+.sw-update[hidden]{display:none}
+.sw-update.is-error{border-color:rgba(248,113,113,.45)}
+.sw-update__msg{font-size:13px;color:var(--t1);flex:1 1 150px;min-width:0}
+.sw-update__actions{display:flex;gap:8px;flex:0 0 auto}
+.sw-update__actions .btn{padding:8px 12px;font-size:12.5px}
+
 /* Detail sheet */
 .detail-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--b1);font-size:13px;gap:10px}
 .detail-row span:first-child{font-family:var(--mono);font-size:10.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;padding-top:2px}

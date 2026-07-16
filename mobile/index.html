@@ -392,6 +392,18 @@
   </div>
 </div>
 
+<!-- Controlled PWA update prompt (P0-D). Non-blocking: never steals focus or
+     interrupts an active form / POD / signature; shown only when an update is
+     already installed and waiting, and reload happens only after the user taps
+     "Update now" and a P0-C durability flush is confirmed. -->
+<div id="swUpdate" class="sw-update" role="status" aria-live="polite" hidden>
+  <span id="swUpdateMsg" class="sw-update__msg">App update ready.</span>
+  <div class="sw-update__actions">
+    <button type="button" class="btn" id="swUpdateLater">Later</button>
+    <button type="button" class="btn primary" id="swUpdateNow">Update now</button>
+  </div>
+</div>
+
 <div id="toast" class="toast" hidden></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 

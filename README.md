@@ -206,17 +206,83 @@ unrecovered) is never uploaded over the cloud.
 in-memory work is preserved, the failure is surfaced (never a false "saved"), and on POD
 completion the heavy photos are dropped before the delivery record itself is lost.
 
-**Service-worker boundary.** This work does not touch `mobile/sw.js` — cache names, the
-install/activate lifecycle, `skipWaiting`/`clients.claim`, and the app-shell caching strategy
-are unchanged (`fos-v12`). The controller-change reload also fires `pagehide`, so an update
-mid-edit is flushed by the lifecycle handler above without any service-worker change. Any
-service-worker update risk is reserved for the separate P0-D task.
+**Service-worker boundary.** P0-C itself changes no service-worker code; it is the
+data-durability layer. The service-worker *update* safety that used to reload mid-edit is
+handled separately by **Controlled PWA updates (P0-D)** below, which calls this same P0-C
+durability flush before it ever activates a new build. P0-D does not add a second save
+system — mobile durability remains this layer.
 
 Regression coverage lives outside this repo at
 `../FuturoFreight_Test_Harnesses/p0c-harness.html` (23 scenarios: durable local write, offline
 reload, rapid-edit coalescing, hide/pagehide flush, interrupted-write and corruption recovery,
 no-upload-of-corrupt-state, quota-failure surfacing, offline startup, reconnection/tie/error
 reconciliation, logout during a pending write, account isolation, stale-session rejection).
+
+## Controlled PWA updates (P0-D)
+
+An app update must never reload the mobile app during active or unsaved work, activate a
+half-downloaded build, strand the user offline after a failed install, or lose the P0-C
+offline snapshot. The service worker (`mobile/sw.js`) and a small update coordinator in
+`mobile/app.js` make updates **atomic** and **user-controlled**.
+
+**Atomic install (never a partial shell).** Each build has an explicit version constant
+(`VERSION`, currently `v13`) and its own cache, `fos-<VERSION>`. On install the new worker
+opens that *candidate* cache and fetches every **mandatory** same-origin shell asset
+individually; a single 404/network failure aborts the whole install, deletes the partial
+candidate cache, and rejects — so a partially populated cache is never promoted and never
+accumulates. The **active** cache (the previous version's) is never opened or modified during
+install, so a failed update leaves the last-known-good shell fully intact and offline startup
+keeps working. Cross-origin brand chrome (fonts, Tabler, the Supabase CDN) is cached
+best-effort and kept separate from the mandatory guarantee. *(Version bump rationale: the
+candidate cache must be a distinct name from the active `fos-v12` cache for install to be
+atomic — writing into `fos-v12` would modify the live cache mid-install.)*
+
+**No forced activation.** Install does **not** call `skipWaiting()`. A new worker installs and
+then **waits**. It only leaves the waiting state when the page sends a `SKIP_WAITING` message
+whose `version` matches the waiting worker's own `VERSION`; malformed or wrong-version messages
+are ignored. A `GET_VERSION` message lets the page identify the pending build.
+
+**Controlled prompt + safe approval.** When a waiting worker is detected (including one already
+waiting at page load), a single non-blocking bottom-bar prompt (`#swUpdate`) offers **Update
+now** / **Later**. It never steals focus or interrupts an active form, POD capture, signature,
+or route — the current version stays fully usable. The prompt is deduped per version, and
+**Later** is session-only (it returns on the next launch). **Update now**:
+1. forces a **P0-C durability flush** (`Store.flush` + `lastWriteOk` confirmation) *first*;
+2. if the flush cannot be confirmed — including protective/recovery mode where in-memory state
+   is a placeholder — activation is **refused**, the current version stays live, and the user is
+   warned (no clobbering of good durable data);
+3. only on a confirmed flush does it post the validated `SKIP_WAITING` message and reload.
+
+**One reload, no loops.** The reload is armed only for our own approved activation, so an
+unrelated `controllerchange` (a sibling tab, or the very first install) never auto-reloads —
+this removes the old unconditional controller-change reload. Reload happens at most once per
+page, and a `sessionStorage` marker (`fos.swActivated=<version>`) survives the reload so the
+same version is never re-driven into an update loop. A bounded timeout recovers the UI if the
+new worker never takes control.
+
+**Activation preserves last-known-good.** Activation runs only after a successful atomic
+install and deletes only obsolete caches this worker owns (the `fos-` prefix) — never the
+current cache and never unrelated origin caches — then `clients.claim()`s. It is idempotent.
+
+**Fetch policy is unchanged** from the approved PR #6 behavior: network-first app shell,
+cache-first vendor/chrome, GET-only, and a hard bypass for live APIs (Supabase, OSRM,
+Nominatim, SAM.gov) and OpenStreetMap tiles, so API/auth responses and map tiles are never
+served from the app-shell cache.
+
+Regression coverage lives outside this repo at
+`../FuturoFreight_Test_Harnesses/p0d-harness.html` (40 scenarios driving the **real** `sw.js`
+and the real coordinator/durability contract against mocked service-worker, cache, session, and
+durability APIs — atomic install/rollback, no-forced-activation, message/version validation,
+scoped cache cleanup, controlled prompt/approval, flush-before-activate, reload-once/loop-guard,
+offline startup, and the preserved PR #6 fetch policy). No real service worker is registered and
+no live Supabase/Netlify/production system is contacted.
+
+**Known rollback limitation.** If activation succeeds but the one-time reload does not fire
+(e.g. the browser blocks it), the bounded timeout re-enables the bar with a manual "reload to
+finish" message rather than looping; the new build takes over on the next manual reload. A
+sibling tab that did not itself approve the update is not force-reloaded mid-work — it adopts
+the new build on its next navigation. These are the documented, safe fallbacks; they have not
+been exhaustively device-tested across every browser.
 - **External services (all free, all optional):** Nominatim (geocoding), OSRM demo
   server (road routing/optimization), OpenStreetMap tiles, SAM.gov API. Every one has
   an offline/failure fallback — the app never blocks on the network.
