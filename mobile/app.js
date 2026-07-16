@@ -37,10 +37,312 @@ const DEFAULT_SETTINGS = {
   webhookUrl: '', samKey: ''
 };
 
+/* ================= durable persistence (P0-C: mobile offline durability) =========
+   The mobile CRM must never silently lose valid offline work, show an empty CRM
+   when good local data exists, or upload stale/default state over newer cloud.
+
+   Design (smallest architecture that closes the confirmed failures):
+   - Per-account SCOPE. All durable snapshots are keyed by the authenticated
+     Supabase uid, or 'local' while signed out, so two accounts on one phone can
+     never read or overwrite each other's work (reuses P0-A's uid/epoch model —
+     see index.html; this is the same isolation contract, not a second one).
+   - Two durability tiers. localStorage is the fast SYNCHRONOUS live store the
+     renderer reads; IndexedDB is a second, more eviction-resistant tier that
+     keeps a last-known-good (LKG) copy for recovery. localStorage per-key writes
+     are atomic (a key is fully replaced or left unchanged — never half-written),
+     so 'current' can never expose a partial value; the LKG + IDB tiers exist for
+     external corruption, quota eviction (iOS drops PWA localStorage after ~7 idle
+     days), and interrupted multi-step writes.
+   - Serialized, coalesced writes. IDB writes run on one chain that keeps only the
+     newest queued snapshot, so a slow older write can never replace a newer one.
+   - Failures surface. A failed durable write returns ok:false; callers warn the
+     user and never report "saved".
+   See README "Mobile offline durability". */
+const Store = (() => {
+  const NS = 'fos.acct';                                  // scoped snapshot key prefix
+  const LEGACY = { jobs: 'fos.jobs', deals: 'deals', settings: 'fos.settings', savedAt: 'fos.savedAt' };
+  const RECOVERY_MAX = 3;                                 // bounded corrupt-payload copies / scope
+  const IDB_NAME = 'futuroos-mobile';                     // durability store identity — do not rename
+  const IDB_VERSION = 1;
+  const IDB_STORE = 'snapshots';
+  const SCHEMA = 2;                                       // snapshot schema (matches cloudState schema)
+
+  let scope = 'local';                                    // 'local' (anonymous) or a Supabase uid
+  let rev = 0;                                            // monotonic write sequence for current scope
+  let curSavedAt = 0;                                     // savedAt of the current scope's snapshot
+  let corruptAtBoot = false;
+  let lastScopeCorrupt = false;   // active scope loaded from a CORRUPT cache with nothing recovered
+  let lastWriteOk = true;
+  let db = null, dbReady = null;
+
+  const scopedKey = (sc, name) => NS + '.' + (sc || 'local') + (name ? '.' + name : '');
+  const curKey = sc => scopedKey(sc);                     // fos.acct.<scope>
+  const lkgKey = sc => scopedKey(sc, 'lkg');              // fos.acct.<scope>.lkg
+  const pick = s => ({ jobs: s.jobs, deals: s.deals, settings: s.settings });
+
+  const validSavedAt = n => typeof n === 'number' && Number.isFinite(n) && n > 0 && n <= Date.now() + 86400000;
+  const validSnap = d => !!d && typeof d === 'object' &&
+    Array.isArray(d.jobs) && Array.isArray(d.deals) && !!d.settings && typeof d.settings === 'object';
+
+  function readRaw(key) {
+    // {state:'OK'|'ABSENT'|'CORRUPT', data?, raw?}. CORRUPT never rewrites/deletes the value.
+    let raw = null;
+    try { raw = localStorage.getItem(key); } catch (e) { return { state: 'ABSENT' }; }
+    if (raw === null) return { state: 'ABSENT' };
+    let d = null;
+    try { d = JSON.parse(raw); } catch (e) { return { state: 'CORRUPT', raw }; }
+    if (!validSnap(d)) return { state: 'CORRUPT', raw };
+    return { state: 'OK', data: d };
+  }
+
+  // An unreadable snapshot is preserved byte-for-byte under a bounded set of keys,
+  // never repaired, never shown, never uploaded. At the cap we stop (never prune).
+  function preserveCorrupt(sc, raw) {
+    try {
+      if (typeof raw !== 'string' || !raw) return;
+      const pfx = scopedKey(sc, 'recovery') + '.';
+      let n = 0;
+      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf(pfx) === 0) n++; }
+      if (n >= RECOVERY_MAX) return;
+      const key = pfx + Date.now();
+      if (localStorage.getItem(key) !== null) return;      // never overwrite
+      localStorage.setItem(key, raw);
+    } catch (e) { /* out of quota: abandon preservation rather than destroy data */ }
+  }
+
+  // Best available localStorage snapshot for a scope: current if OK, else LKG.
+  // A corrupt current is preserved before falling through.
+  function readScoped(sc) {
+    const cur = readRaw(curKey(sc));
+    if (cur.state === 'OK') return { data: cur.data, source: 'current' };
+    if (cur.state === 'CORRUPT') preserveCorrupt(sc, cur.raw);
+    const lkg = readRaw(lkgKey(sc));
+    if (lkg.state === 'OK') return { data: lkg.data, source: 'lkg', recovered: cur.state === 'CORRUPT' };
+    return { data: null, source: 'none', recovered: cur.state === 'CORRUPT', absent: cur.state === 'ABSENT' };
+  }
+
+  // Promote-on-write: write 'current'; only if that succeeds, copy the PRIOR good
+  // current into LKG. Returns false on quota/security failure (caller surfaces it).
+  function writeScopedLocal(sc, snap) {
+    const prior = readRaw(curKey(sc));
+    try { localStorage.setItem(curKey(sc), JSON.stringify(snap)); }
+    catch (e) { return false; }
+    if (prior.state === 'OK' && validSavedAt(prior.data.savedAt)) {
+      try { localStorage.setItem(lkgKey(sc), JSON.stringify(prior.data)); } catch (e) { /* LKG best-effort */ }
+    }
+    return true;
+  }
+
+  function composeFromLegacy() {
+    // One-time carry of the pre-P0-C global keys (existing installs) into a snapshot.
+    let jobs = [], deals = [], settings = {};
+    try { jobs = JSON.parse(localStorage.getItem(LEGACY.jobs) || '[]'); } catch (e) {}
+    try { deals = JSON.parse(localStorage.getItem(LEGACY.deals) || '[]'); } catch (e) {}
+    try { settings = JSON.parse(localStorage.getItem(LEGACY.settings) || '{}'); } catch (e) {}
+    if (!Array.isArray(jobs)) jobs = [];
+    if (!Array.isArray(deals)) deals = [];
+    if (!settings || typeof settings !== 'object') settings = {};
+    const savedAt = +(localStorage.getItem(LEGACY.savedAt) || 0) || Date.now();
+    return { schema: SCHEMA, jobs, deals, settings, savedAt, rev: 0 };
+  }
+
+  /* ---- IndexedDB durability tier (LKG + recovery; async, serialized) ---- */
+  function openDb() {
+    if (dbReady) return dbReady;
+    dbReady = new Promise(resolve => {
+      let req;
+      try { req = indexedDB.open(IDB_NAME, IDB_VERSION); }
+      catch (e) { resolve(null); return; }                // IDB unavailable (private mode / disabled)
+      req.onupgradeneeded = () => {
+        const d = req.result;
+        if (!d.objectStoreNames.contains(IDB_STORE)) d.createObjectStore(IDB_STORE, { keyPath: 'scope' });
+      };
+      req.onsuccess = () => { db = req.result; resolve(db); };
+      req.onerror = () => resolve(null);
+      req.onblocked = () => resolve(null);
+    });
+    return dbReady;
+  }
+
+  let idbChain = Promise.resolve();
+  let idbPending = null;                                   // newest queued {scope,snap}
+  function idbWrite(sc, snap) {
+    idbPending = { scope: sc, snap };                      // coalesce: retain only the newest
+    idbChain = idbChain.then(async () => {
+      if (!idbPending) return;
+      const jobIt = idbPending; idbPending = null;
+      const d = await openDb();
+      if (!d) return;
+      await new Promise(res => {
+        let tx;
+        try { tx = d.transaction(IDB_STORE, 'readwrite'); } catch (e) { return res(); }
+        const st = tx.objectStore(IDB_STORE);
+        const getReq = st.get(jobIt.scope);
+        getReq.onsuccess = () => {
+          const ex = getReq.result;
+          // atomic promote: prior valid current -> LKG within this same transaction
+          const lkg = (ex && validSnap(ex.current) && validSavedAt(ex.current.savedAt))
+            ? ex.current : (ex && ex.lastKnownGood) || null;
+          const rec = {
+            scope: jobIt.scope, current: jobIt.snap, lastKnownGood: lkg,
+            meta: { uid: jobIt.scope === 'local' ? null : jobIt.scope, savedAt: jobIt.snap.savedAt, schema: SCHEMA, rev: jobIt.snap.rev }
+          };
+          try { st.put(rec); } catch (e) {}
+        };
+        getReq.onerror = () => {};
+        tx.oncomplete = () => res();
+        tx.onerror = () => res();
+        tx.onabort = () => res();                          // interrupted write: current stays intact
+      });
+    }).catch(() => {});
+    return idbChain;
+  }
+
+  function idbRead(sc) {
+    return openDb().then(d => {
+      if (!d) return null;
+      return new Promise(res => {
+        let tx;
+        try { tx = d.transaction(IDB_STORE, 'readonly'); } catch (e) { return res(null); }
+        const req = tx.objectStore(IDB_STORE).get(sc);
+        req.onsuccess = () => {
+          const rec = req.result;
+          if (!rec) return res(null);
+          if (validSnap(rec.current)) return res(rec.current);
+          if (validSnap(rec.lastKnownGood)) return res(rec.lastKnownGood);   // recover from interrupted/corrupt current
+          res(null);
+        };
+        req.onerror = () => res(null);
+      });
+    });
+  }
+
+  return {
+    get scope() { return scope; },
+    corruptAtBoot: () => corruptAtBoot,
+    scopeCorrupt: () => lastScopeCorrupt,   // active scope had unreadable data we could not recover
+    lastWriteOk: () => lastWriteOk,
+    savedAt: () => curSavedAt || 0,
+
+    // Synchronous boot: anonymous scope, migrate legacy globals once, hydrate memory.
+    bootSnapshot() {
+      scope = 'local'; rev = 0; curSavedAt = 0; lastScopeCorrupt = false;
+      const cur = readRaw(curKey('local'));
+      if (cur.state === 'ABSENT') {
+        const hasLegacy = ['jobs', 'deals', 'settings'].some(k => localStorage.getItem(LEGACY[k]) !== null);
+        if (hasLegacy) {
+          const snap = composeFromLegacy();
+          writeScopedLocal('local', snap); idbWrite('local', snap);
+          rev = snap.rev; curSavedAt = snap.savedAt;
+          return pick(snap);
+        }
+        return { jobs: [], deals: [], settings: {} };
+      }
+      if (cur.state === 'OK') { rev = cur.data.rev || 0; curSavedAt = cur.data.savedAt || 0; return pick(cur.data); }
+      // CORRUPT: preserve, then fall back to LKG; async IDB recovery runs after boot.
+      preserveCorrupt('local', cur.raw);
+      const lkg = readRaw(lkgKey('local'));
+      if (lkg.state === 'OK') { rev = lkg.data.rev || 0; curSavedAt = lkg.data.savedAt || 0; return pick(lkg.data); }
+      corruptAtBoot = true; lastScopeCorrupt = true;
+      return { jobs: [], deals: [], settings: {} };
+    },
+
+    async init() { await openDb(); },
+
+    // If the active scope has no usable localStorage snapshot but IDB holds a
+    // durable one, rehydrate the live store from it. Returns the snapshot or null.
+    async recoverFromDurable(sc) {
+      if (readRaw(curKey(sc)).state === 'OK') return null;
+      const dur = await idbRead(sc);
+      if (!dur || !validSnap(dur)) return null;
+      curSavedAt = dur.savedAt || curSavedAt; rev = dur.rev || rev;
+      writeScopedLocal(sc, dur);
+      return pick(dur);
+    },
+
+    // Persist the in-memory snapshot for the active scope. Serialized to IDB;
+    // localStorage is synchronous. bump:false preserves savedAt (used when we are
+    // recording authoritative cloud state, not a fresh local edit).
+    persist(mem, opts) {
+      const bump = !opts || opts.bump !== false;
+      if (bump) { rev++; curSavedAt = Date.now(); }
+      if (!curSavedAt) curSavedAt = Date.now();
+      const snap = { schema: SCHEMA, jobs: mem.jobs, deals: mem.deals, settings: mem.settings, savedAt: curSavedAt, rev };
+      const ok = writeScopedLocal(scope, snap);
+      lastWriteOk = ok;
+      idbWrite(scope, snap);
+      return { ok, savedAt: snap.savedAt };
+    },
+
+    // Record state pulled from the cloud, preserving the cloud's savedAt so a
+    // later compare sees local == cloud (no upload loop, no stale overwrite).
+    applyRemote(mem, savedAt) {
+      curSavedAt = validSavedAt(savedAt) ? savedAt : Date.now();
+      rev++;
+      const snap = { schema: SCHEMA, jobs: mem.jobs, deals: mem.deals, settings: mem.settings, savedAt: curSavedAt, rev };
+      lastWriteOk = writeScopedLocal(scope, snap);
+      idbWrite(scope, snap);
+      return lastWriteOk;
+    },
+
+    // Switch scope to a uid (sign-in) or 'local' (sign-out). On first sign-in for
+    // an account with no snapshot yet, seed it from the anonymous bucket so local-
+    // first work follows the sign-in. Returns the scope's in-memory snapshot.
+    setAccount(uid) {
+      const target = uid || 'local';
+      if (target === scope) return null;
+      if (uid && readRaw(curKey(uid)).state === 'ABSENT') {
+        const anon = readScoped('local');
+        if (anon.data && (anon.data.jobs.length || anon.data.deals.length)) {
+          writeScopedLocal(uid, { schema: SCHEMA, jobs: anon.data.jobs, deals: anon.data.deals,
+            settings: anon.data.settings, savedAt: anon.data.savedAt || Date.now(), rev: 0 });
+        }
+      }
+      scope = target;
+      const r = readScoped(scope);
+      if (r.data) { rev = r.data.rev || 0; curSavedAt = r.data.savedAt || 0; lastScopeCorrupt = false; return pick(r.data); }
+      // No usable snapshot: distinguish a brand-new/empty scope (trusted) from an
+      // unreadable one (untrusted — there WAS data we could not recover).
+      lastScopeCorrupt = r.recovered === true;
+      rev = 0; curSavedAt = 0;
+      return { jobs: [], deals: [], settings: {} };
+    },
+
+    // Lifecycle durability: force the latest in-memory state to localStorage
+    // synchronously (IDB may not finish before suspension) for the CURRENT scope
+    // only. Does not bump savedAt. Kicks the IDB mirror; returns the chain promise.
+    flush(mem) {
+      if (!curSavedAt) curSavedAt = Date.now();
+      const snap = { schema: SCHEMA, jobs: mem.jobs, deals: mem.deals, settings: mem.settings, savedAt: curSavedAt, rev };
+      if (!writeScopedLocal(scope, snap)) lastWriteOk = false;
+      return idbWrite(scope, snap);
+    },
+
+    // Explicit offline-data removal for ONE scope only (active by default):
+    // current, LKG, recovery copies, and the IDB record. Never touches other scopes.
+    async removeScope(sc) {
+      const s = sc || scope;
+      const prefix = scopedKey(s, '');
+      try {
+        const kill = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k === curKey(s) || k.indexOf(prefix + '.') === 0)) kill.push(k);
+        }
+        kill.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+      } catch (e) {}
+      const d = await openDb();
+      if (d) { try { const tx = d.transaction(IDB_STORE, 'readwrite'); tx.objectStore(IDB_STORE).delete(s); } catch (e) {} }
+      if (s === scope) { rev = 0; curSavedAt = 0; }
+    },
+
+    // Test-only hook: reset in-memory scope/rev state (harness uses this between cases).
+    _resetForTest() { scope = 'local'; rev = 0; curSavedAt = 0; corruptAtBoot = false; lastWriteOk = true; db = null; dbReady = null; idbChain = Promise.resolve(); idbPending = null; }
+  };
+})();
+
 const S = {
-  jobs: JSON.parse(localStorage.getItem('fos.jobs') || '[]'),
-  deals: JSON.parse(localStorage.getItem('deals') || '[]'),
-  settings: Object.assign({}, DEFAULT_SETTINGS, JSON.parse(localStorage.getItem('fos.settings') || '{}')),
+  jobs: [], deals: [], settings: Object.assign({}, DEFAULT_SETTINGS),
   date: toISODate(new Date()),
   pos: null,            // {lat,lng,t}
   watchId: null,
@@ -51,10 +353,27 @@ const S = {
   scanStream: null,
   view: 'today'
 };
+// Hydrate the live store from the durable, account-scoped snapshot (guarded — a
+// corrupt cache can no longer throw at module load and blank the whole app).
+(() => {
+  const boot = Store.bootSnapshot();
+  S.jobs = Array.isArray(boot.jobs) ? boot.jobs : [];
+  S.deals = Array.isArray(boot.deals) ? boot.deals : [];
+  S.settings = Object.assign({}, DEFAULT_SETTINGS, boot.settings || {});
+})();
 
-const saveJobs = () => { localStorage.setItem('fos.jobs', JSON.stringify(S.jobs)); queueJobSync(); };
-const saveDeals = () => { localStorage.setItem('deals', JSON.stringify(S.deals)); queueCloudSave(); };
-const saveSettings = () => { localStorage.setItem('fos.settings', JSON.stringify(S.settings)); queueCloudSave(); };
+// Centralized save: persist the whole in-memory snapshot durably, surface storage
+// failure (never a false "saved"), then queue the relevant cloud sync.
+function _persistLocal(queue) {
+  const r = Store.persist(S);
+  if (r.ok) _localTrusted = true;   // a genuine local write means we hold real data now
+  else toast('⚠ Storage full — changes may not be saved. Back up from Settings.');
+  if (queue) queue();
+  return r;
+}
+const saveJobs = () => _persistLocal(queueJobSync);
+const saveDeals = () => _persistLocal(queueCloudSave);
+const saveSettings = () => _persistLocal(queueCloudSave);
 
 const jobsOn = date => S.jobs.filter(j => j.date === date).sort((a, b) => (a.seq || 0) - (b.seq || 0));
 const openJobsOn = date => jobsOn(date).filter(j => j.status !== 'done' && j.status !== 'failed');
@@ -253,9 +572,14 @@ function stopGps() {
 }
 
 function trackKey(d) { return 'fos.track.' + d; }
+// Guarded parse: corrupt track data must never throw in a render/GPS path.
+function readTrack(key) {
+  try { const a = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(a) ? a : []; }
+  catch (e) { return []; }
+}
 function logBreadcrumb(cur) {
   const key = trackKey(toISODate(new Date()));
-  const track = JSON.parse(localStorage.getItem(key) || '[]');
+  const track = readTrack(key);
   const last = track[track.length - 1];
   if (!last || haversine(last, cur) > 30) {
     track.push({t: cur.t, lat: +cur.lat.toFixed(5), lng: +cur.lng.toFixed(5)});
@@ -264,7 +588,7 @@ function logBreadcrumb(cur) {
   }
 }
 function milesOn(date) {
-  const track = JSON.parse(localStorage.getItem(trackKey(date)) || '[]');
+  const track = readTrack(trackKey(date));
   let m = 0;
   for (let i = 1; i < track.length; i++) m += haversine(track[i - 1], track[i]);
   return m;
@@ -322,7 +646,7 @@ function exportJson() {
   const tracks = {};
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    if (k.startsWith('fos.track.')) tracks[k] = JSON.parse(localStorage.getItem(k));
+    if (k && k.startsWith('fos.track.')) tracks[k] = readTrack(k);
   }
   download('futuroos-backup-' + toISODate(new Date()) + '.json',
     JSON.stringify({jobs: S.jobs, deals: S.deals, settings: S.settings, tracks}, null, 1), 'application/json');
@@ -830,10 +1154,14 @@ async function finishPod(failed) {
   }));
   j.status = failed ? 'failed' : 'done';
   logEvent(j, failed ? 'failed' : 'completed');
-  try { saveJobs(); }
-  catch (e) { // storage full: drop photos rather than lose the completion
-    j.pod.photos = []; saveJobs(); toast('Storage full — photos not saved');
+  // Durable-save the completion. On quota failure, drop the heavy photos rather
+  // than lose the delivery record itself, then retry — never a false "saved".
+  let w = Store.persist(S);
+  if (!w.ok) {
+    j.pod.photos = []; w = Store.persist(S);
+    toast(w.ok ? 'Storage full — photos not saved' : '⚠ Storage full — could not fully save this delivery');
   }
+  queueJobSync();
   fireWebhook(failed ? 'job.failed' : 'job.completed', j);
   stopScan(); stopIdScan();
   $('podSheet').hidden = true;
@@ -1392,12 +1720,49 @@ const FF_SUPABASE_URL = 'https://plsimvwufpqquuipkysi.supabase.co';
 const FF_SUPABASE_KEY = 'sb_publishable_nXrPTG_v935fahzd7q_ZWQ_0A7t8s3J';
 let supa = null, cloudUser = null, _cloudTimer = null, _cloudApplying = false;
 
+// --- account isolation + cloud-write gating (reuses the P0-A desktop model) ---
+let _authEpoch = 0;          // bumped on sign-out/switch; invalidates in-flight async work
+let _cloudWritable = false;  // no cloud write until a definitive load outcome authorizes it
+let _cloudInFlight = false, _cloudPending = false;
+// False when boot could not read a valid local snapshot AND recovery failed: an
+// empty/default state we cannot trust must never be uploaded over the cloud.
+let _localTrusted = true;
+// Capture identity + epoch before an await; re-check with _authOk before acting on
+// the result, so a write from a previous auth session can never land on a new one.
+function _authCap() { return { uid: (cloudUser && cloudUser.id) || null, epoch: _authEpoch }; }
+function _authOk(cap) { const uid = cloudUser && cloudUser.id; return !!(cap && cap.uid && uid && cap.epoch === _authEpoch && cap.uid === uid); }
+
+// Load the active account's durable snapshot into memory and switch scope. Used on
+// sign-in (uid) and sign-out (null). Renders whatever local data exists immediately
+// so an offline start shows the account's real work, not an empty CRM.
+function _switchScope(uid) {
+  const mem = Store.setAccount(uid || null);
+  if (mem) { S.jobs = mem.jobs; S.deals = mem.deals; S.settings = Object.assign({}, DEFAULT_SETTINGS, mem.settings || {}); }
+  // If this scope's cache was unreadable and nothing recovered, stay protective so
+  // the empty/default state is never uploaded over the account's cloud. Try the
+  // IndexedDB durability tier before giving up.
+  _localTrusted = !Store.scopeCorrupt();
+  if (!_localTrusted) {
+    Store.recoverFromDurable(Store.scope).then(rec => {
+      if (rec && Store.scope === (uid || 'local')) {
+        S.jobs = Array.isArray(rec.jobs) ? rec.jobs : S.jobs;
+        S.deals = Array.isArray(rec.deals) ? rec.deals : S.deals;
+        S.settings = Object.assign({}, DEFAULT_SETTINGS, rec.settings || {});
+        _localTrusted = true; render();
+      }
+    }).catch(() => {});
+  }
+  return mem;
+}
+
 function initCloud() {
   if (!window.supabase) { updateCloudUi(); return; } // CDN unreachable → local-only mode
   supa = window.supabase.createClient(FF_SUPABASE_URL, FF_SUPABASE_KEY);
   supa.auth.getSession().then(async ({data}) => {
     if (data && data.session) {
-      cloudUser = data.session.user; updateCloudUi();
+      cloudUser = data.session.user;
+      _switchScope(cloudUser.id);   // load this account's scoped snapshot before any cloud read
+      updateCloudUi(); render(); loadSettingsForm();
       await pullCloud();     // deals/settings (+ one-time carry-over of old inline jobs)
       await pullJobs();      // authoritative jobs from the shared table
       subscribeJobs();       // live updates from the desktop Deliveries page
@@ -1405,54 +1770,69 @@ function initCloud() {
     } else updateCloudUi();
   }).catch(() => updateCloudUi());
 }
-// mobile_snapshot now carries only deals + settings; JOBS live in the shared
-// `jobs` table (see below) so the desktop Deliveries surface and the phone
-// read/write one list.
-const cloudState = () => ({schema: 2, deals: S.deals, settings: S.settings, savedAt: Date.now()});
+// mobile_snapshot carries only deals + settings; JOBS live in the shared `jobs`
+// table (below) so the desktop Deliveries surface and the phone read/write one list.
+// savedAt comes from the durable snapshot so cloud and local carry the SAME stamp
+// (a later compare then sees a tie, not a phantom "local is newer" → no upload loop).
+const cloudState = () => ({schema: 2, deals: S.deals, settings: S.settings, savedAt: Store.savedAt() || Date.now()});
 function applyCloudState(d) {
   if (!d) return false;
   _cloudApplying = true;
   try {
-    // one-time migration: old snapshots stored jobs inline — carry them over
-    // once so they can be pushed into the shared jobs table by pullJobs().
-    if (Array.isArray(d.jobs) && d.jobs.length && !S.jobs.length) {
-      S.jobs = d.jobs; localStorage.setItem('fos.jobs', JSON.stringify(S.jobs));
-    }
-    if (Array.isArray(d.deals)) { S.deals = d.deals; saveDeals(); }
-    if (d.settings) { S.settings = Object.assign({}, DEFAULT_SETTINGS, d.settings); saveSettings(); }
-    if (d.savedAt) localStorage.setItem('fos.savedAt', String(d.savedAt));
+    // one-time migration: old snapshots stored jobs inline — carry them over once
+    // so pullJobs() can push them into the shared jobs table.
+    if (Array.isArray(d.jobs) && d.jobs.length && !S.jobs.length) S.jobs = d.jobs;
+    if (Array.isArray(d.deals)) S.deals = d.deals;
+    if (d.settings) S.settings = Object.assign({}, DEFAULT_SETTINGS, d.settings);
+    // Persist with the cloud's savedAt preserved (not a fresh local stamp).
+    Store.applyRemote(S, d.savedAt);
+    _localTrusted = true;             // we now hold verified state from the cloud
   } finally { _cloudApplying = false; }
   return true;
 }
+// Three distinct outcomes, never conflated: a failed cloud READ (ERROR) must not be
+// treated as an absent row (which would authorize uploading local over the cloud).
 async function pullCloud() {
-  if (!supa || !cloudUser) return;
+  const cap = _authCap();
+  if (!_authOk(cap) || !supa) return;
+  let row = null, err = null;
   try {
-    const {data: row, error} = await supa.from('mobile_snapshot')
-      .select('data').eq('owner', cloudUser.id).maybeSingle();
-    if (error) { updateCloudUi('cloud error: ' + error.message); return; }
-    const localAt = +(localStorage.getItem('fos.savedAt') || 0);
-    if (row && row.data && (row.data.savedAt || 0) > localAt) {
-      applyCloudState(row.data);
-      loadSettingsForm();
-      updateCloudUi();
-    } else {
-      pushCloud(); // no cloud row yet, or this phone is newer
-    }
-  } catch (e) { updateCloudUi('offline — local only'); }
+    const res = await supa.from('mobile_snapshot').select('data').eq('owner', cap.uid).maybeSingle();
+    row = res.data; err = res.error;
+  } catch (e) { err = e; }
+  if (!_authOk(cap)) return;                                   // switched accounts mid-flight
+  if (err) { updateCloudUi('cloud error — using local data'); return; }  // CLOUD_LOAD_ERROR: do NOT authorize writes
+  _cloudWritable = true;                                        // CLOUD_ROW_LOADED or CLOUD_ROW_ABSENT: definitive
+  const localAt = Store.savedAt();
+  if (row && row.data && (row.data.savedAt || 0) > localAt) {   // cloud strictly newer → cloud wins
+    applyCloudState(row.data); loadSettingsForm(); updateCloudUi();
+  } else {
+    // Row absent, local newer, or exact savedAt tie → this device wins (deterministic
+    // tie-break: local wins; it re-uploads the same stamp once, so no loop).
+    pushCloud();
+  }
 }
 async function pushCloud() {
-  if (!supa || !cloudUser) return;
+  const cap = _authCap();
+  if (!_authOk(cap) || !supa) return;
+  if (!_cloudWritable) { updateCloudUi('local only — sync not yet authorized'); return; }  // never upload before a load outcome
+  if (!_localTrusted) { updateCloudUi('local data unverified — not syncing'); return; }     // never upload corrupt/default state
+  if (_cloudInFlight) { _cloudPending = true; return; }         // serialize: no overlapping upserts
+  _cloudInFlight = true;
   const data = cloudState();
-  localStorage.setItem('fos.savedAt', String(data.savedAt));
   try {
     const {error} = await supa.from('mobile_snapshot')
-      .upsert({owner: cloudUser.id, data, updated_at: new Date().toISOString()}, {onConflict: 'owner'});
+      .upsert({owner: cap.uid, data, updated_at: new Date().toISOString()}, {onConflict: 'owner'});
+    if (!_authOk(cap)) return;                                  // signed out while the write was in flight
     updateCloudUi(error ? 'cloud error: ' + error.message : null);
   } catch (e) { updateCloudUi('offline — will retry on next save'); }
+  finally {
+    _cloudInFlight = false;
+    if (_cloudPending) { _cloudPending = false; if (_authOk(cap) && _cloudWritable) pushCloud(); }
+  }
 }
 function queueCloudSave() {
-  if (_cloudApplying) return;
-  localStorage.setItem('fos.savedAt', String(Date.now()));
+  if (_cloudApplying) return;                                   // savedAt already set by Store.persist
   if (!supa || !cloudUser) return;
   clearTimeout(_cloudTimer);
   _cloudTimer = setTimeout(pushCloud, 800);
@@ -1460,9 +1840,9 @@ function queueCloudSave() {
 
 /* ------- shared jobs table (two-way sync with the desktop Deliveries page) ------- */
 let _jobTimer = null, _jobsChannel = null, _rtTimer = null;
-function jobToRow(j) {
+function jobToRow(j, uid) {
   return {
-    id: j.id, owner: cloudUser.id, type: j.type || 'delivery', customer: j.customer || null,
+    id: j.id, owner: uid || cloudUser.id, type: j.type || 'delivery', customer: j.customer || null,
     phone: j.phone || null, email: j.email || null, address: j.address || null,
     lat: j.lat ?? null, lng: j.lng ?? null, job_date: j.date || null,
     win_s: j.winS || null, win_e: j.winE || null, rate: j.rate ?? null,
@@ -1483,36 +1863,43 @@ function rowToJob(r) {
   };
 }
 async function pullJobs() {
-  if (!supa || !cloudUser) return;
-  try {
-    const {data, error} = await supa.from('jobs').select('*').eq('owner', cloudUser.id);
-    if (error) { console.warn('pullJobs:', error.message); return; }
-    const rows = data || [];
-    if (!rows.length) { if (S.jobs.length) pushAllJobs(); return; } // seed cloud from this phone
-    // server rows are authoritative for their id; keep local-only (offline) jobs.
-    const seen = new Set();
-    const merged = rows.map(r => { seen.add(r.id); return rowToJob(r); });
-    const localOnly = S.jobs.filter(j => !seen.has(j.id));
-    localOnly.forEach(j => merged.push(j));
-    _cloudApplying = true;
-    try { S.jobs = merged; localStorage.setItem('fos.jobs', JSON.stringify(S.jobs)); }
-    finally { _cloudApplying = false; }
-    if (localOnly.length) localOnly.forEach(pushJob); // push offline-created jobs up
-    render();
-  } catch (e) { /* offline — keep local */ }
+  const cap = _authCap();
+  if (!_authOk(cap) || !supa) return;
+  let data = null, error = null;
+  try { const res = await supa.from('jobs').select('*').eq('owner', cap.uid); data = res.data; error = res.error; }
+  catch (e) { return; }                                     // offline — keep local
+  if (error) { console.warn('pullJobs:', error.message); return; }  // load error is never row-absence
+  if (!_authOk(cap)) return;                                // switched accounts mid-flight
+  const rows = data || [];
+  if (!rows.length) { if (S.jobs.length) pushAllJobs(); return; } // seed cloud from this phone
+  // server rows are authoritative for their id; keep local-only (offline) jobs.
+  const seen = new Set();
+  const merged = rows.map(r => { seen.add(r.id); return rowToJob(r); });
+  const localOnly = S.jobs.filter(j => !seen.has(j.id));
+  localOnly.forEach(j => merged.push(j));
+  _cloudApplying = true;
+  // Persist authoritative jobs without bumping savedAt (this is cloud state, not
+  // a fresh local edit that should win the next deals/settings compare).
+  try { S.jobs = merged; Store.persist(S, {bump: false}); }
+  finally { _cloudApplying = false; }
+  if (localOnly.length) localOnly.forEach(pushJob); // push offline-created jobs up
+  render();
 }
 async function pushAllJobs() {
-  if (!supa || !cloudUser || !S.jobs.length) return;
-  try { await supa.from('jobs').upsert(S.jobs.map(jobToRow), {onConflict: 'id'}); }
+  const cap = _authCap();
+  if (!_authOk(cap) || !supa || !S.jobs.length) return;
+  try { await supa.from('jobs').upsert(S.jobs.map(j => jobToRow(j, cap.uid)), {onConflict: 'id'}); }
   catch (e) { /* offline — retry on next save */ }
 }
 async function pushJob(job) {
-  if (!supa || !cloudUser) return;
-  try { await supa.from('jobs').upsert([jobToRow(job)], {onConflict: 'id'}); } catch (e) {}
+  const cap = _authCap();
+  if (!_authOk(cap) || !supa) return;
+  try { await supa.from('jobs').upsert([jobToRow(job, cap.uid)], {onConflict: 'id'}); } catch (e) {}
 }
 async function deleteJobRow(id) {
-  if (!supa || !cloudUser) return;
-  try { await supa.from('jobs').delete().eq('id', id).eq('owner', cloudUser.id); } catch (e) {}
+  const cap = _authCap();
+  if (!_authOk(cap) || !supa) return;
+  try { await supa.from('jobs').delete().eq('id', id).eq('owner', cap.uid); } catch (e) {}
 }
 // Mirror a delivery window to Google Calendar (best-effort; dormant until the
 // Google Apps Script bridge + secrets are set — see integrations/google-apps-script).
@@ -1561,9 +1948,13 @@ async function cloudAuthClick() {
   if (!window.supabase) { toast('Cloud unavailable — check connection'); return; }
   if (cloudUser) {
     unsubscribeJobs();
+    _authEpoch++;                    // invalidate any pending/in-flight cloud write first
+    _cloudWritable = false;
+    clearTimeout(_cloudTimer); clearTimeout(_jobTimer);
     await supa.auth.signOut().catch(() => {});
     cloudUser = null;
-    updateCloudUi();
+    _switchScope(null);              // back to the anonymous scope — no account data left on screen
+    updateCloudUi(); render(); loadSettingsForm();
     toast('Signed out — data stays on this phone');
     return;
   }
@@ -1582,8 +1973,11 @@ async function doAuth(signup) {
     if (error) { st.textContent = error.message; return; }
     if (data.session || data.user && !signup) {
       cloudUser = (data.session && data.session.user) || data.user;
+      _authEpoch++;                  // fresh session — invalidate any stale in-flight work
+      _cloudWritable = false;
+      _switchScope(cloudUser.id);    // load this account's scoped snapshot immediately (offline-safe)
       $('authSheet').hidden = true;
-      updateCloudUi();
+      updateCloudUi(); render(); loadSettingsForm();
       await pullCloud();
       await pullJobs();
       subscribeJobs();
@@ -1781,6 +2175,46 @@ function shiftDay(delta) {
   render();
 }
 
+/* ---------------- lifecycle durability (P0-C) ----------------
+   Mobile browsers freeze/kill backgrounded tabs and rarely fire beforeunload.
+   On every hide/suspend, force the latest in-memory snapshot to durable local
+   storage FIRST (synchronous), then best-effort flush any pending cloud write.
+   Idempotent, and Store.flush targets the CURRENT scope only, so nothing is
+   written under a signed-out/other account. The SW's controllerchange reload
+   also triggers pagehide, so an update mid-edit is flushed here too. */
+function _lifecycleFlush() {
+  // In protective mode (local unreadable + unrecovered) the in-memory state is an
+  // empty placeholder — do NOT let a hide overwrite the durable tiers (localStorage
+  // LKG / IndexedDB) with it before async recovery has had a chance to restore data.
+  if (_localTrusted) { try { Store.flush(S); } catch (e) { /* durability best-effort — never block hide */ } }
+  // Cloud flush only after a definitive load has authorized writes, so a hide that
+  // lands before reconciliation can never push stale local over newer cloud state.
+  const cap = _authCap();
+  if (_authOk(cap) && _cloudWritable) {
+    clearTimeout(_cloudTimer); pushCloud();
+    clearTimeout(_jobTimer); pushAllJobs();
+  }
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) _lifecycleFlush(); });
+window.addEventListener('pagehide', _lifecycleFlush);
+window.addEventListener('freeze', _lifecycleFlush);   // Page Lifecycle API (Chromium)
+
+/* Durability internals exposed for the external P0-C regression harness. Harmless
+   in production (no secrets, no auto-actions); the harness drives the real
+   reconciliation/persistence code rather than a copy. */
+window.__fosDurability = {
+  Store, get S() { return S; }, render,
+  get cloudUser() { return cloudUser; }, get epoch() { return _authEpoch; },
+  get cloudWritable() { return _cloudWritable; }, get localTrusted() { return _localTrusted; },
+  setSupa(m) { supa = m; }, setSupabaseLib(m) { window.supabase = m; },
+  setCloudWritable(v) { _cloudWritable = !!v; }, setLocalTrusted(v) { _localTrusted = !!v; },
+  signIn(uid) { cloudUser = { id: uid, email: uid + '@futuroos.test' }; _authEpoch++; _cloudWritable = false; _switchScope(uid); },
+  signOut() { _authEpoch++; _cloudWritable = false; clearTimeout(_cloudTimer); clearTimeout(_jobTimer); cloudUser = null; _switchScope(null); },
+  pullCloud, pullJobs, pushCloud, pushAllJobs, pushJob, saveJobs, saveDeals, saveSettings,
+  lifecycleFlush: () => _lifecycleFlush(),
+  recover: (sc) => Store.recoverFromDurable(sc || Store.scope)
+};
+
 /* ---------------- init ---------------- */
 wire();
 $('brandSub').textContent = 'Mobile Ops — ' + S.settings.company;
@@ -1789,6 +2223,25 @@ show('today');
 startGps();
 initCloud();
 updateInstallUi();
+// P0-C async recovery: if the synchronous boot could not read a valid local
+// snapshot for the active scope, rehydrate from the IndexedDB durability tier
+// before the user starts editing over an empty screen.
+Store.init().then(async () => {
+  const rec = await Store.recoverFromDurable(Store.scope);
+  if (rec) {
+    S.jobs = Array.isArray(rec.jobs) ? rec.jobs : S.jobs;
+    S.deals = Array.isArray(rec.deals) ? rec.deals : S.deals;
+    S.settings = Object.assign({}, DEFAULT_SETTINGS, rec.settings || {});
+    render();
+    _localTrusted = true;             // recovered a valid durable snapshot
+    if (Store.corruptAtBoot()) toast('Recovered your data from the on-device backup');
+  } else if (Store.corruptAtBoot()) {
+    // No valid local snapshot and none recoverable: stay protective — do NOT let
+    // this empty/default state be uploaded over whatever the cloud may hold.
+    _localTrusted = false;
+    toast('⚠ Local data was unreadable — working in recovery mode');
+  }
+}).catch(() => {});
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   // When a NEW service worker takes control (sw.js does skipWaiting + claim),
   // reload once so the user lands on the fresh build instead of having to close
