@@ -91,6 +91,16 @@ If your local cache ever becomes unreadable, the raw value is preserved byte-for
 `futurofreight_v1:recovery:<user-id>:<timestamp>` (up to 3 copies per account) rather than
 being deleted, and the app carries on from the cloud copy.
 
+### Imported data is treated as untrusted
+
+CSV lead import (**Import CSV** on the Leads page) and the public website inbound funnel can
+carry arbitrary text. Imported values are stored as the user's original text — never
+HTML-encoded at rest — and are escaped at every render sink via `esc()`, so a value like
+`<img src=x onerror=…>` is shown as inert text and never executes. No imported value is turned
+into a clickable link or an event-handler attribute; the `tel:`/`mailto:` actions use fixed
+schemes only. Persistent-XSS regression coverage lives outside this repo at
+`../FuturoFreight_Test_Harnesses/p0b-harness.html`.
+
 ### Tests
 
 The regression harness for the rules above lives **outside this repository**, at
