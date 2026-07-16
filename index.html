@@ -543,6 +543,15 @@ body::after{background:radial-gradient(135% 100% at 50% 38%,transparent 58%,rgba
 .kpi-l{letter-spacing:.05em;font-size:10.5px}
 .fi-row>*{min-width:0}
 .fi{min-width:0}
+
+/* ── MOBILE FIT PASS · 2026-07-16 · phone-width layout ── */
+.split-360{display:grid;grid-template-columns:360px 1fr;gap:14px;align-items:start}
+@media screen and (max-width:760px){
+  .split-360{grid-template-columns:1fr}
+  .card:has(.th){overflow-x:auto}
+  .th,.tr{min-width:560px}
+  .hero{overflow:hidden} /* decorative glow was nudging the page 5px sideways */
+}
 </style>
 
 
@@ -698,7 +707,7 @@ window.ffLogoutForget = async function(){
   </div>
   <nav class="nav" id="nav" aria-label="Main navigation"></nav>
   <div class="nav-footer">
-    <a href="mobile/" class="nb" style="text-decoration:none;margin-bottom:8px"><i class="ti ti-device-mobile" aria-hidden="true"></i>Mobile Ops</a>
+    <a href="mobile/" target="_blank" rel="noopener" class="nb" style="text-decoration:none;margin-bottom:8px"><i class="ti ti-device-mobile" aria-hidden="true"></i>Mobile Ops</a>
     <div style="display:flex;align-items:center;gap:9px">
       <div class="avatar ff-me"><div class="ff-mark"></div></div>
       <div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--t1)">You</div><div style="font-size:11px;color:var(--t3)">Owner · National</div></div>
@@ -3321,7 +3330,7 @@ let qtHistory=[],qtSeq=1000;
 function qtNum(){return'QT-'+String(++qtSeq).padStart(5,'0');}
 function rQuoting(){
   document.getElementById('content').innerHTML=`
-  <div style="display:grid;grid-template-columns:360px 1fr;gap:14px;max-width:960px;align-items:start">
+  <div class="split-360" style="max-width:960px">
     <div>
       <div class="card" style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -6225,7 +6234,7 @@ function profileEditCreds(){const P=GC_PROFILE;ffModal('Edit Credentials',`<div 
 function rLiveSync(){
   const cfg=GC_SYNC, configured=!!cfg.workerUrl;
   document.getElementById('content').innerHTML=`
-  <div style="display:grid;grid-template-columns:360px 1fr;gap:14px;align-items:start">
+  <div class="split-360">
     <div>
       <div class="card" style="margin-bottom:12px">
         <div class="card-title">Cloudflare Worker</div>

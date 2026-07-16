@@ -1,5 +1,5 @@
 /* FuturoOS service worker — offline app shell */
-const CACHE = 'fos-v11';
+const CACHE = 'fos-v12';
 const SHELL = [
   './',
   './index.html',
@@ -59,7 +59,8 @@ const cachePut = (req, res) => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   // never cache live APIs (routing, geocoding, SAM.gov, Supabase data/auth)
-  if (/api\.sam\.gov|router\.project-osrm|nominatim|supabase\.co/.test(url.host)) return;
+  // or map tiles — a cached failed tile would blank the map permanently
+  if (/api\.sam\.gov|router\.project-osrm|nominatim|supabase\.co|tile\.openstreetmap\.org/.test(url.host)) return;
   if (e.request.method !== 'GET') return;
 
   if (isAppShell(url)) {

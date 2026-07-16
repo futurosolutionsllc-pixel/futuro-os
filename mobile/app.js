@@ -384,7 +384,7 @@ function stopCard(j, i, etas) {
   return `<div class="stop ${j.status === 'done' || j.status === 'failed' ? 'done' : ''}" data-id="${j.id}">
     <div class="stop-seq ${cur && cur.id === j.id ? 'active-stop' : ''}">${i}</div>
     <div class="stop-body">
-      <div class="stop-name">${esc(j.customer || 'Unnamed')} ${j.type === 'pickup' ? '<span class="badge type-pickup">Pickup</span>' : ''}</div>
+      <div class="stop-name">${esc(j.customer || 'Unnamed')} ${j.type === 'pickup' ? '<span class="badge type-pickup">Pickup</span>' : ''}${j.secured ? '<span class="badge ontime">🛡 Secured</span>' : ''}</div>
       <div class="stop-addr">${esc(j.address || 'No address')}</div>
       <div class="stop-meta">
         ${statusBadge(j)}
@@ -483,8 +483,8 @@ function driveAction(act, j) {
 let map, mapLayer, myMarker;
 function initMap() {
   if (map || typeof L === 'undefined') { if (map) setTimeout(() => map.invalidateSize(), 60); return; }
-  map = L.map('map', {zoomControl: true}).setView([39.5, -98.35], 4);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  map = L.map('map', {zoomControl: true}).setView(S.pos ? [S.pos.lat, S.pos.lng] : [39.5, -98.35], S.pos ? 14 : 4);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     {maxZoom: 19, attribution: '© OpenStreetMap'}).addTo(map);
   mapLayer = L.layerGroup().addTo(map);
   setTimeout(() => map.invalidateSize(), 60);
@@ -493,6 +493,11 @@ function updateMyMarker() {
   if (!map || !S.pos) return;
   if (!myMarker) {
     myMarker = L.circleMarker([S.pos.lat, S.pos.lng], {radius: 8, color: '#86a6ff', fillColor: '#3b72ff', fillOpacity: .9}).addTo(map);
+    // first GPS fix: if still on the country-level default with no stops to
+    // frame, bring the map to the driver
+    if (map.getZoom() <= 5 && !jobsOn(S.date).some(j => j.lat != null)) {
+      map.setView([S.pos.lat, S.pos.lng], 14);
+    }
   } else myMarker.setLatLng([S.pos.lat, S.pos.lng]);
 }
 function renderMap() {
@@ -514,9 +519,10 @@ function renderMap() {
   else if (openPts.length > 1) L.polyline(openPts, {color: '#22d39b', weight: 2, dashArray: '6 6', opacity: .6}).addTo(mapLayer);
   updateMyMarker();
   if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.2));
+  else if (S.pos) map.setView([S.pos.lat, S.pos.lng], Math.max(map.getZoom(), 13));
   $('mapLegend').innerHTML = jobs.length
     ? `${jobs.length} stops on ${S.date}${geom ? ' · optimized road route' : ' · straight-line preview (run Optimize for road route)'}`
-    : 'No geocoded stops for this day.';
+    : (S.pos ? 'No stops on this day — showing your position.' : 'No geocoded stops for this day. Waiting for GPS…');
 }
 
 /* ---------------- JOBS list + editor ---------------- */
@@ -627,8 +633,10 @@ function openDetail(id) {
     ${j.pod.reason ? `<div class="detail-row"><span>Fail reason</span><span>${esc(j.pod.reason)}</span></div>` : ''}
     ${j.pod.note ? `<div class="detail-row"><span>Note</span><span>${esc(j.pod.note)}</span></div>` : ''}
     ${j.pod.barcodes?.length ? `<div class="detail-row"><span>Barcodes</span><span>${j.pod.barcodes.map(esc).join(', ')}</span></div>` : ''}
+    ${j.pod.receivedBy ? `<div class="detail-row"><span>Received by</span><span>${esc(j.pod.receivedBy)}</span></div>` : ''}
     ${j.pod.idVerify ? `<div class="detail-row"><span>ID verified</span><span>${j.pod.idVerify.verified ? '✓' : '⚠'} ${esc(j.pod.idVerify.method || '')}${j.pod.idVerify.age != null ? ' · age ' + j.pod.idVerify.age : ''}</span></div>` : ''}
     ${j.pod.lat ? `<div class="detail-row"><span>Location</span><span>${j.pod.lat.toFixed(5)}, ${j.pod.lng.toFixed(5)}</span></div>` : ''}
+    ${j.pod.hash ? `<div class="detail-row"><span>Integrity</span><span style="font-family:var(--mono);font-size:11px">${j.pod.hash.slice(0, 16)}…</span></div>` : ''}
     <div class="detail-photos">${(j.pod.photos || []).map(p => `<img src="${p}" alt="POD photo">`).join('')}</div>
     ${j.pod.signature ? `<img class="detail-sig" src="${j.pod.signature}" alt="Signature">` : ''}` : '';
   const rc = j.pod && j.pod.receipt;
@@ -650,6 +658,7 @@ function openDetail(id) {
       <button class="btn small" id="dEdit"><i class="ti ti-pencil"></i> Edit</button>
       <button class="btn small" id="dNav"><i class="ti ti-navigation"></i> Navigate</button>
       ${j.status !== 'done' && j.status !== 'failed' ? '<button class="btn small success" id="dPod"><i class="ti ti-checklist"></i> POD</button>' : ''}
+      ${j.pod ? '<button class="btn small" id="dCustody"><i class="ti ti-file-certificate"></i> Custody record</button>' : ''}
       ${j.status === 'done' || j.status === 'failed' ? '<button class="btn small" id="dReopen"><i class="ti ti-arrow-back-up"></i> Reopen</button>' : ''}
     </div>
     ${rows.map(r => `<div class="detail-row"><span>${r[0]}</span><span>${esc(r[1])}</span></div>`).join('')}
@@ -660,6 +669,7 @@ function openDetail(id) {
   $('dEdit').onclick = () => { $('detailSheet').hidden = true; openJobSheet(id); };
   $('dNav').onclick = () => window.open(navLink(j), '_blank');
   const dPod = $('dPod'); if (dPod) dPod.onclick = () => { $('detailSheet').hidden = true; openPod(id); };
+  const dCu = $('dCustody'); if (dCu) dCu.onclick = () => openCustodyRecord(id);
   const dRe = $('dReopen'); if (dRe) dRe.onclick = () => { j.status = 'pending'; j.pod = null; saveJobs(); $('detailSheet').hidden = true; render(); };
   const dDl = $('dRcptDl'); if (dDl) dDl.onclick = () => downloadReceipt(id);
   const dSend = $('dRcptSend'); if (dSend) dSend.onclick = () => resendReceipt(id);
@@ -686,7 +696,8 @@ function openPod(id) {
   $('podBarcodes').textContent = '';
   $('podBarcodeIn').value = '';
   $('podNote').value = '';
-  $('podStatus').textContent = '';
+  $('podRecvName').value = '';
+  $('podStatus').textContent = j.secured ? '🛡 Secured delivery — photo, signature, and recipient name are required to complete.' : '';
   $('scanStatus').textContent = ('BarcodeDetector' in window) ? '' : 'Live scan not supported here — type the code.';
   $('podBarcodeReq').textContent = j.barcodeRequired ? `required: ${j.barcodeRequired}` : '';
   $('sigStatus').textContent = '';
@@ -762,12 +773,31 @@ function registerBarcode(code) {
   $('scanStatus').textContent = '✓ ' + code;
   $('podBarcodeIn').value = '';
 }
-function finishPod(failed) {
+async function sha256Hex(text) {
+  try {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch (e) { return null; } // non-secure context — hash unavailable
+}
+
+async function finishPod(failed) {
   const j = S.jobs.find(x => x.id === S.podJobId);
   if (!j) return;
   const typed = $('podBarcodeIn').value.trim();
   if (typed) registerBarcode(typed);
-  if (!failed && j.barcodeRequired && !pod.barcodes.includes(j.barcodeRequired)) {
+  const receivedBy = $('podRecvName').value.trim();
+  if (!failed && j.secured) {
+    // secured deliveries: the custody basics are mandatory, no overrides
+    const missing = [];
+    if (!pod.photos.length) missing.push('photo');
+    if (!pod.drawn) missing.push('signature');
+    if (!receivedBy) missing.push('recipient name');
+    if (j.barcodeRequired && !pod.barcodes.includes(j.barcodeRequired)) missing.push(`barcode ${j.barcodeRequired}`);
+    if (missing.length) {
+      $('podStatus').textContent = '🛡 Secured delivery — still needed: ' + missing.join(', ') + '.';
+      return;
+    }
+  } else if (!failed && j.barcodeRequired && !pod.barcodes.includes(j.barcodeRequired)) {
     if (!confirm(`Required barcode ${j.barcodeRequired} not scanned. Complete anyway?`)) return;
   }
   if (!failed && j.secured && (!idv || !idv.verified)) {
@@ -782,12 +812,22 @@ function finishPod(failed) {
     photos: pod.photos,
     signature: pod.drawn ? cv.toDataURL('image/jpeg', 0.6) : null,
     barcodes: pod.barcodes,
+    receivedBy,
     note: $('podNote').value.trim(),
     reason,
     idVerify: (!failed && j.secured) ? idv : null,
     t: new Date().toISOString(),
     lat: S.pos?.lat ?? null, lng: S.pos?.lng ?? null
   };
+  // tamper-evident integrity fingerprint over the custody facts
+  j.pod.hash = await sha256Hex(JSON.stringify({
+    job: j.id, customer: j.customer, address: j.address, secured: !!j.secured,
+    status: failed ? 'failed' : 'done', completedAt: j.pod.t,
+    lat: j.pod.lat, lng: j.pod.lng, receivedBy,
+    barcodes: pod.barcodes, note: j.pod.note, reason,
+    idVerified: !!(j.pod.idVerify && j.pod.idVerify.verified),
+    photoCount: pod.photos.length, signed: !!j.pod.signature
+  }));
   j.status = failed ? 'failed' : 'done';
   logEvent(j, failed ? 'failed' : 'completed');
   try { saveJobs(); }
@@ -1009,6 +1049,71 @@ function downloadReceipt(id) {
 async function resendReceipt(id) {
   const j = S.jobs.find(x => x.id === id); if (!j) return;
   toast('Sending receipt…'); await issueReceipt(j); if (S.view) openDetail(id);
+}
+
+/* ---------------- custody record — printable chain-of-custody document
+   (complements the customer receipt PDF: this is the operator/compliance
+   artifact with the full event trail, GPS stamps, and integrity hash) ---------------- */
+function custodyRecordHtml(j) {
+  const s = S.settings;
+  const fmtEvt = e => {
+    const names = {created: 'Order created', enroute: 'Departed — en route', arrived: 'Arrived on site',
+      completed: 'Delivered — custody transferred', failed: 'Delivery attempt failed', navigate: 'Navigation started', sms: 'Customer notified (SMS)'};
+    const gps = e.lat != null ? ` @ ${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}` : '';
+    return `<tr><td>${new Date(e.t).toLocaleString()}</td><td>${esc(names[e.type] || e.type)}${e.label ? ' — ' + esc(e.label) : ''}${gps}</td></tr>`;
+  };
+  const p = j.pod || {};
+  const idv2 = p.idVerify;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Custody ${esc(j.id)} — ${esc(s.company)}</title>
+<style>
+body{font-family:system-ui,sans-serif;color:#111;max-width:700px;margin:24px auto;padding:0 16px;font-size:13px;line-height:1.5}
+h1{font-size:17px;margin:0}
+.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #136131;padding-bottom:10px;margin-bottom:14px}
+.co{font-size:19px;font-weight:800;color:#136131}
+.tag{display:inline-block;background:#136131;color:#fff;font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px}
+table{width:100%;border-collapse:collapse;margin:8px 0 16px}
+td,th{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top;font-size:12.5px}
+th{background:#f2f6f3;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#136131}
+.sec{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#136131;font-weight:700;margin:16px 0 4px}
+img.sig{max-height:90px;border:1px solid #ddd;border-radius:6px;background:#fff}
+img.ph{max-width:180px;max-height:180px;border:1px solid #ddd;border-radius:6px;margin:4px 6px 0 0}
+.hash{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;word-break:break-all;background:#f2f6f3;padding:8px 10px;border-radius:6px}
+.foot{margin-top:18px;font-size:10.5px;color:#666}
+@media print{.noprint{display:none}}
+</style></head><body>
+<div class="head">
+  <div><div class="co">${esc(s.company)}</div><h1>Proof of Delivery — Chain of Custody Record</h1></div>
+  <div style="text-align:right">${j.secured ? '<span class="tag">SECURED DELIVERY</span><br>' : ''}<span style="font-size:11px;color:#666">Ref ${esc(j.id)}</span></div>
+</div>
+<table>
+  <tr><td style="width:150px"><b>Status</b></td><td>${j.status === 'done' ? 'DELIVERED' : 'ATTEMPT FAILED' + (p.reason ? ' — ' + esc(p.reason) : '')}</td></tr>
+  <tr><td><b>Customer</b></td><td>${esc(j.customer || '—')}</td></tr>
+  <tr><td><b>Address</b></td><td>${esc(j.address || '—')}</td></tr>
+  <tr><td><b>Service date</b></td><td>${esc(j.date)}${(j.winS || j.winE) ? ` (window ${j.winS || '…'}–${j.winE || '…'})` : ''}</td></tr>
+  <tr><td><b>Completed</b></td><td>${p.t ? new Date(p.t).toLocaleString() : '—'}${p.lat != null ? ` @ ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}` : ''}</td></tr>
+  <tr><td><b>Received by</b></td><td>${esc(p.receivedBy || '—')}</td></tr>
+  ${idv2 ? `<tr><td><b>ID verification</b></td><td>${idv2.verified ? 'VERIFIED' : 'NOT VERIFIED'}${idv2.method ? ' · ' + esc(idv2.method) : ''}${idv2.age != null ? ' · age ' + idv2.age : ''}</td></tr>` : ''}
+  ${p.barcodes?.length ? `<tr><td><b>Barcodes verified</b></td><td>${p.barcodes.map(esc).join(', ')}</td></tr>` : ''}
+  ${p.receipt?.conf ? `<tr><td><b>Confirmation #</b></td><td>${esc(p.receipt.conf)}</td></tr>` : ''}
+  ${p.note ? `<tr><td><b>Note</b></td><td>${esc(p.note)}</td></tr>` : ''}
+</table>
+<div class="sec">Custody timeline</div>
+<table><tr><th style="width:190px">Time</th><th>Event</th></tr>${(j.events || []).map(fmtEvt).join('')}</table>
+${p.signature ? `<div class="sec">Recipient signature</div><img class="sig" src="${p.signature}" alt="signature">` : ''}
+${p.photos?.length ? `<div class="sec">Photos (${p.photos.length})</div>${p.photos.map(ph => `<img class="ph" src="${ph}">`).join('')}` : ''}
+${p.hash ? `<div class="sec">Record integrity (SHA-256)</div><div class="hash">${p.hash}</div>
+<div class="foot">This fingerprint was computed from the custody facts above at the moment of completion. Recomputing it over the same facts must produce the same value — any alteration of this record changes the fingerprint.</div>` : ''}
+<div class="foot">Generated ${new Date().toLocaleString()} by ${esc(s.company)} · Futuro OS Mobile Ops</div>
+<button class="noprint" onclick="print()" style="margin-top:14px;padding:10px 18px;font-size:14px;cursor:pointer">Print / Save as PDF</button>
+</body></html>`;
+}
+function openCustodyRecord(id) {
+  const j = S.jobs.find(x => x.id === id);
+  if (!j || !j.pod) return;
+  const w = window.open('', '_blank');
+  if (!w) { toast('Popup blocked — allow popups for this site'); return; }
+  w.document.write(custodyRecordHtml(j));
+  w.document.close();
 }
 
 /* ---------------- STATS (analytics) ---------------- */
