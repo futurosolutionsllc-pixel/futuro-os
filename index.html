@@ -1775,7 +1775,7 @@ function _csvParse(text){
   return rows.filter(r=>!(r.length===1 && r[0].trim()===''));
 }
 function _dlLeadTemplate(){
-  const header='company,city,state,industry,equipment,monthly_loads,annual_spend,source,phone,email,contact_name,contact_title,tags,notes\n';
+  const header=['company','city','state','industry','equipment','monthly_loads','annual_spend','source','phone','email','contact_name','contact_title','tags','notes'].map(safeCsvCell).join(',')+'\n';
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([header],{type:'text/csv'}));
   a.download='futurofreight_leads_template.csv';
@@ -2140,6 +2140,21 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;',
 // primary defense against stored XSS from the public lead funnel; esc() at the
 // render sinks is the second layer. [hardening 2026-07-14]
 function scrub(s){return String(s==null?'':s).replace(/[<>]/g,'').slice(0,2000);}
+// Neutralize spreadsheet formula injection + RFC-4180 quote a single CSV cell.
+// Finite numbers stay numeric text (negatives/zero preserved). Strings that begin
+// with a spreadsheet-dangerous trigger (= + - @ TAB CR LF) get one leading
+// apostrophe so Excel/Sheets treat them as text, not a formula; an already-
+// neutralized value (leading apostrophe) is never re-prefixed. Then commas, quotes
+// and newlines are quoted and embedded quotes doubled. Single central serializer —
+// every exported cell routes through here. [S1 fix 2026-07-16]
+function safeCsvCell(v){
+  if(typeof v==='number'&&isFinite(v))return String(v);
+  if(v==null)return'';
+  let s=String(v);
+  if(/^[=+\-@\t\r\n]/.test(s))s="'"+s;
+  if(/[",\r\n]/.test(s))s='"'+s.replace(/"/g,'""')+'"';
+  return s;
+}
 const $m=n=>n>=1e6?'$'+(n/1e6).toFixed(1)+'M':n>=1e3?'$'+(n/1e3).toFixed(0)+'K':'$'+Math.round(n).toLocaleString();
 const $p=n=>Number(n).toFixed(1)+'%';
 const $a=ms=>{if(!ms)return'Never';const d=Math.floor((Date.now()-ms)/864e5);return d===0?'Today':d===1?'Yesterday':d<7?d+'d ago':d<30?Math.floor(d/7)+'w ago':Math.floor(d/30)+'mo ago';};
@@ -2548,22 +2563,23 @@ function rCarriers(){
   </div>`;
 }
 function cRows(){
-  return CA.map(c=>{
+  return CA.map((c,i)=>{
     const isSel=selCarriers.has(c.mc);
     return`<div class="tr${isSel?' selected':''}" style="grid-template-columns:30px 2fr 90px 1fr 70px 80px 60px">
-      <div onclick="event.stopPropagation();toggleSelCarrier('${c.mc}')">
+      <div onclick="event.stopPropagation();toggleSelCarrier(${i})">
         <div class="sel-cb${isSel?' checked':''}">${isSel?'<i class="ti ti-check" style="font-size:10.5px"></i>':''}</div>
       </div>
-      <div><div class="cn">${c.co}</div><div class="cs2">${c.mc} · ${c.sta} · ${c.tr} trucks</div></div>
-      <span class="badge" style="background:${c.st==='preferred'?'var(--bgreen)':'var(--bblue)'};color:${c.st==='preferred'?'var(--tgreen)':'var(--tblue)'}">${c.st}</span>
-      <div>${c.fr.map(t=>`<span style="font-size:10.5px;background:var(--bg4);color:var(--t2);padding:2px 5px;border-radius:3px;margin-right:2px">${t.replace('_',' ')}</span>`).join('')}</div>
+      <div><div class="cn">${esc(c.co)}</div><div class="cs2">${esc(c.mc)} · ${esc(c.sta)} · ${c.tr} trucks</div></div>
+      <span class="badge" style="background:${c.st==='preferred'?'var(--bgreen)':'var(--bblue)'};color:${c.st==='preferred'?'var(--tgreen)':'var(--tblue)'}">${esc(c.st)}</span>
+      <div>${c.fr.map(t=>`<span style="font-size:10.5px;background:var(--bg4);color:var(--t2);padding:2px 5px;border-radius:3px;margin-right:2px">${esc(String(t).replace('_',' '))}</span>`).join('')}</div>
       <div style="font-size:12px;font-weight:600;color:${c.ot>=95?'var(--tgreen)':c.ot>=90?'var(--tamber)':'var(--tred)'}">${c.ot}%</div>
       <div style="font-size:12px;color:var(--t2)">${c.ac}%</div>
       <div style="font-size:12px;color:var(--t2)">${c.ld}</div>
     </div>`;
   }).join('');
 }
-function toggleSelCarrier(mc){
+function toggleSelCarrier(i){
+  const c=CA[i];if(!c)return;const mc=c.mc;
   if(selCarriers.has(mc))selCarriers.delete(mc);else selCarriers.add(mc);
   updateCarSelBar();
   const el=document.getElementById('car-list');if(el)el.innerHTML=cRows();
@@ -3690,7 +3706,7 @@ function vetLog(){
 function vetRenderLog(){
   if(!VETLOG.length)return'<div style="font-size:11px;color:var(--t3);text-align:center;padding:14px">No carriers logged yet</div>';
   const c={'GO':'#34d399','REVIEW':'#86a6ff','NO-GO':'#f87171'};
-  return VETLOG.map(r=>`<div class="dlog-row"><div style="width:8px;height:8px;border-radius:50%;background:${c[r.decision]};flex-shrink:0"></div><div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.name}${r.mc?' · '+r.mc:''}</div><div style="font-size:11px;color:var(--t3)">${r.decision} · ${r.pct}%${r.critical?' · '+r.critical+' critical':''} · ${tagoT(r.ts)}</div></div></div>`).join('');
+  return VETLOG.map(r=>`<div class="dlog-row"><div style="width:8px;height:8px;border-radius:50%;background:${c[r.decision]};flex-shrink:0"></div><div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}${r.mc?' · '+esc(r.mc):''}</div><div style="font-size:11px;color:var(--t3)">${r.decision} · ${r.pct}%${r.critical?' · '+r.critical+' critical':''} · ${tagoT(r.ts)}</div></div></div>`).join('');
 }
 
 // ===== FLOAT GUARDRAIL =====
@@ -4701,7 +4717,7 @@ function rLiveJobs(){
       <div class="sel-cb${isSel?' checked':''}" role="checkbox" aria-checked="${isSel}" aria-label="Select ${j.jobId}" tabindex="0" onclick="event.stopPropagation();toggleSelJob('${j.jobId}')">${isSel?'✓':''}</div>
       <div><div class="cn">${j.jobId} · ${j.customerName||'—'}</div><div class="cs2">${jobFlags(j)}${(j.contentsDescription||'').slice(0,40)}</div></div>
       <div>${$jt(j.jobTypeKey)}</div><div>${$sec(j.securityLevel)}</div><div>${$stage(j.stageStatus)}${j.exceptionStatus==='open'?' <i class="ti ti-alert-triangle" style="color:var(--tred);font-size:12px" aria-hidden="true"></i>':''}</div>
-      <div style="font-size:11px;color:var(--t2)">${j.assignedDriver||j.assignedCarrier||'—'}</div>
+      <div style="font-size:11px;color:var(--t2)">${esc(j.assignedDriver||j.assignedCarrier||'—')}</div>
       <div style="font-size:11px;font-weight:600;color:${+j.customerCharge>0?'var(--t1)':'var(--t3)'}">${+j.customerCharge>0?$m(+j.customerCharge):'—'}</div>
       <div style="font-size:11px;color:var(--t3)">${$a(j.updatedAt)}</div>
     </div>`;}).join('')||'<div class="empty-state"><i class="ti ti-package" aria-hidden="true"></i>No jobs match this filter.<br>Create one with + New Order — it appears here immediately.</div>'}
@@ -4778,7 +4794,7 @@ function jobOvTab(j){
         <div class="fg"><label class="fl">SLA</label><input class="fi" ${dis} value="${j.sla||''}" placeholder="e.g. Deliver by 3 PM" onchange="setJobField('${j.jobId}','sla',this.value)"></div>
       </div>
       <div class="fi-row">
-        <div class="fg"><label class="fl">Carrier (if tendered)</label><input class="fi" ${dis} value="${j.assignedCarrier||''}" onchange="setJobField('${j.jobId}','assignedCarrier',this.value)"></div>
+        <div class="fg"><label class="fl">Carrier (if tendered)</label><input class="fi" ${dis} value="${esc(j.assignedCarrier||'')}" onchange="setJobField('${j.jobId}','assignedCarrier',this.value)"></div>
         <div class="fg"><label class="fl">Tamper seal #</label><input class="fi" ${dis} value="${j.sealNumber||''}" placeholder="${j.tamperSealRequired?'required before dispatch':'n/a'}" onchange="setJobField('${j.jobId}','sealNumber',this.value)"></div>
       </div>
       ${(()=>{const gate=['S2','S3','S4'].includes(j.securityLevel)?credentialGate(j,DRIVERS.find(d=>d.name===j.assignedDriver)):null;
@@ -6186,7 +6202,7 @@ function gcParseRFP(){
   if(!out.length)document.getElementById('gc-matrix').innerHTML='<div class="card"><div class="empty-state">No "shall/must" or Section L/M lines detected. Check the pasted text.</div></div>';
   else _toast(out.length+' requirements extracted',false);
 }
-function gcExportMatrix(){if(!gcMatrix.length)return;const csv='Num,Requirement,Source\n'+gcMatrix.map((r,i)=>`${i+1},"${(r.text||'').replace(/"/g,'""')}","${r.tag}"`).join('\n');const b=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='compliance-matrix.csv';a.click();}
+function gcExportMatrix(){if(!gcMatrix.length)return;const csv=[['Num','Requirement','Source'].map(safeCsvCell).join(',')].concat(gcMatrix.map((r,i)=>[i+1,r.text||'',r.tag||''].map(safeCsvCell).join(','))).join('\n');const b=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='compliance-matrix.csv';a.click();}
 function propAdd(){ffModal('Add Proposal Artifact',fText('p-title','Title')+fSelect('p-type','Type',[['technical','Technical narrative'],['management','Management plan'],['staffing','Staffing plan'],['past_performance','Past performance'],['win_theme','Win theme']])+fText('p-agency','Agency (optional)')+fTextarea('p-excerpt','Excerpt / notes'),()=>{const t=_val('p-title');if(!t){alert('Title required');return false;}GC_PROP.unshift({id:gcId('prop'),title:t,type:_val('p-type'),agency:_val('p-agency'),excerpt:_val('p-excerpt'),date:Date.now()});gcLog('Proposal artifact added',t);saveAll();rGCProposals();_toast('Artifact saved',false);});}
 
 // ---- RELATIONSHIPS (shared into GOVCONTACTS) ----

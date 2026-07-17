@@ -11,6 +11,21 @@
 /* ---------------- helpers ---------------- */
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Neutralize spreadsheet formula injection + RFC-4180 quote a single CSV cell.
+// Finite numbers stay numeric text (negatives/zero preserved). Strings that begin
+// with a spreadsheet-dangerous trigger (= + - @ TAB CR LF) get one leading
+// apostrophe so Excel/Sheets treat them as text, not a formula; an already-
+// neutralized value (leading apostrophe) is never re-prefixed. Then commas, quotes
+// and newlines are quoted and embedded quotes doubled. Single central serializer —
+// every exported cell routes through here. [S1 fix 2026-07-16]
+function safeCsvCell(v){
+  if(typeof v==='number'&&isFinite(v))return String(v);
+  if(v==null)return'';
+  let s=String(v);
+  if(/^[=+\-@\t\r\n]/.test(s))s="'"+s;
+  if(/[",\r\n]/.test(s))s='"'+s.replace(/"/g,'""')+'"';
+  return s;
+}
 const fmt$ = n => '$' + (Math.round(n * 100) / 100).toLocaleString();
 const pad = n => String(n).padStart(2, '0');
 const toISODate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -669,10 +684,11 @@ function importJson(file) {
 }
 function exportCsv() {
   const cols = ['id', 'date', 'type', 'customer', 'phone', 'address', 'winStart', 'winEnd', 'rate', 'status', 'completedAt', 'failReason', 'notes'];
+  const header = cols.map(safeCsvCell).join(',');
   const rows = S.jobs.map(j => [j.id, j.date, j.type, j.customer, j.phone, j.address, j.winS, j.winE, j.rate,
     j.status, j.pod?.t || '', j.pod?.reason || '', j.notes]
-    .map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(','));
-  download('futuroos-jobs.csv', cols.join(',') + '\n' + rows.join('\n'), 'text/csv');
+    .map(safeCsvCell).join(','));
+  download('futuroos-jobs.csv', header + '\n' + rows.join('\n'), 'text/csv');
 }
 
 /* ---------------- view switching ---------------- */
