@@ -1152,6 +1152,8 @@ function _applyState(data) {
   S.length = 0; data.S.forEach(x => S.push(x));
   T.length = 0; data.T.forEach(x => T.push(x));
   CA.length = 0; data.CA.forEach(x => CA.push(x));
+  // Selection/identity depends on a stable unique id; backfill any legacy/imported carrier lacking one.
+  CA.forEach(c => { if (c && !c.id) c.id = _genId('c'); });
   done.clear(); (data.done||[]).forEach(x => done.add(x));
   clDone.clear(); (data.clDone||[]).forEach(x => clDone.add(x));
   if (data.orgSettings) {
@@ -2564,7 +2566,7 @@ function rCarriers(){
 }
 function cRows(){
   return CA.map((c,i)=>{
-    const isSel=selCarriers.has(c.mc);
+    const isSel=selCarriers.has(c.id);
     return`<div class="tr${isSel?' selected':''}" style="grid-template-columns:30px 2fr 90px 1fr 70px 80px 60px">
       <div onclick="event.stopPropagation();toggleSelCarrier(${i})">
         <div class="sel-cb${isSel?' checked':''}">${isSel?'<i class="ti ti-check" style="font-size:10.5px"></i>':''}</div>
@@ -2579,16 +2581,16 @@ function cRows(){
   }).join('');
 }
 function toggleSelCarrier(i){
-  const c=CA[i];if(!c)return;const mc=c.mc;
-  if(selCarriers.has(mc))selCarriers.delete(mc);else selCarriers.add(mc);
+  const c=CA[i];if(!c)return;const id=c.id;
+  if(selCarriers.has(id))selCarriers.delete(id);else selCarriers.add(id);
   updateCarSelBar();
   const el=document.getElementById('car-list');if(el)el.innerHTML=cRows();
   const cb=document.getElementById('car-all-cb');
-  if(cb){const a=CA.length>0&&CA.every(c=>selCarriers.has(c.mc));cb.className='sel-cb'+(a?' checked':'');cb.innerHTML=a?'<i class="ti ti-check" style="font-size:10.5px"></i>':'';}
+  if(cb){const a=CA.length>0&&CA.every(c=>selCarriers.has(c.id));cb.className='sel-cb'+(a?' checked':'');cb.innerHTML=a?'<i class="ti ti-check" style="font-size:10.5px"></i>':'';}
 }
 function toggleAllCarriers(){
-  const allSel=CA.length>0&&CA.every(c=>selCarriers.has(c.mc));
-  CA.forEach(c=>allSel?selCarriers.delete(c.mc):selCarriers.add(c.mc));
+  const allSel=CA.length>0&&CA.every(c=>selCarriers.has(c.id));
+  CA.forEach(c=>allSel?selCarriers.delete(c.id):selCarriers.add(c.id));
   updateCarSelBar();
   const el=document.getElementById('car-list');if(el)el.innerHTML=cRows();
   const cb=document.getElementById('car-all-cb');
@@ -2604,7 +2606,8 @@ function deleteCarriers(){
   if(!confirm('Delete '+selCarriers.size+' carrier'+(selCarriers.size!==1?'s':'')+'? You can press Undo right after.'))return;
   undoPoint('deleted '+selCarriers.size+' carrier'+(selCarriers.size!==1?'s':''));
   const n=selCarriers.size;
-  selCarriers.forEach(mc=>{const i=CA.findIndex(c=>c.mc===mc);if(i>-1)CA.splice(i,1);});
+  // Delete by stable record id, descending, so index shifts never delete the wrong record.
+  for(let i=CA.length-1;i>=0;i--){if(selCarriers.has(CA[i].id))CA.splice(i,1);}
   selCarriers.clear();saveAll();rCarriers();
   _toast('Deleted '+n+' carrier'+(n!==1?'s':''));
 }
