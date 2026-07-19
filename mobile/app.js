@@ -1006,6 +1006,8 @@ function openDetail(id) {
     ${receiptBlock}
     ${events ? `<h3 style="margin-top:14px">Activity</h3>${events}` : ''}`;
   $('detailSheet').hidden = false;
+  const detailScroller = $('detailSheet').querySelector('.sheet-card');
+  if (detailScroller) detailScroller.scrollTop = 0;
   $('dEdit').onclick = () => { $('detailSheet').hidden = true; openJobSheet(id); };
   $('dNav').onclick = () => window.open(navLink(j), '_blank');
   const dPod = $('dPod'); if (dPod) dPod.onclick = () => { $('detailSheet').hidden = true; openPod(id); };
