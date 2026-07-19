@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Futuro OS — Solo Edition</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -423,9 +423,14 @@ body{font-size:14px;line-height:1.55}
 /* ===== MOBILE · drawer nav + card-collapsed tables ===== */
 @media screen and (max-width:760px){
   .app{flex-direction:column;height:auto;min-height:100vh;overflow:visible}
-  .sidebar{position:fixed;top:0;left:0;bottom:0;width:min(300px,86vw);height:100vh;transform:translateX(-105%);transition:transform .22s ease;z-index:9000;background:rgba(8,12,22,.98);border-right:1px solid var(--b2);overflow-y:auto}
+  .sidebar{position:fixed;top:0;left:0;bottom:0;width:min(300px,86vw);height:100vh;height:100dvh;transform:translateX(-105%);transition:transform .22s ease;z-index:9000;background:rgba(8,12,22,.98);border-right:1px solid var(--b2)}
   .sidebar.open{transform:translateX(0)}
-  .nav-toggle{display:flex;align-items:center}
+  .nav{min-height:0}
+  .sidebar .logo{padding-top:calc(16px + env(safe-area-inset-top))}
+  .nav-footer{padding-bottom:calc(18px + env(safe-area-inset-bottom))}
+  body.nav-open{overflow:hidden}
+  .nav-footer button{min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center}
+  .nav-toggle{display:flex;align-items:center;min-height:44px;min-width:44px;justify-content:center}
   .main{overflow:visible}
   .content{padding:16px 14px 60px;overflow-y:visible}
   .page-help{margin:14px 14px 0}
@@ -445,6 +450,7 @@ body{font-size:14px;line-height:1.55}
   .nba-btn{margin-left:0;width:100%}
   .nba-btn .btn{width:100%}
   .fi,select.fi{font-size:16px}
+  #ff-email,#ff-pass{font-size:16px!important}
 }
 /* ===== FUTURA GLOW PASS · 2026-07-08 · Syne type · topographic backdrop · sharp glowing edges ===== */
 :root{--rmd:7px;--rlg:11px;--edge:rgba(134,166,255,.30);--edge-soft:rgba(124,156,214,.17)}
@@ -563,15 +569,15 @@ body::after{background:radial-gradient(135% 100% at 50% 38%,transparent 58%,rgba
      Login gate. The CRM below only initializes after sign-in.
      ============================================================ -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<div id="ff-auth" style="position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:#0a0e14;font-family:'Syne',system-ui,sans-serif">
+<div id="ff-auth" style="position:fixed;inset:0;z-index:100000;display:flex;align-items:center;align-items:safe center;justify-content:center;overflow-y:auto;background:#0a0e14;font-family:'Syne',system-ui,sans-serif">
   <div style="width:340px;max-width:90vw;background:#111722;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:32px 28px;box-shadow:0 30px 80px -30px rgba(0,0,0,.8)">
     <div style="text-align:center;margin-bottom:24px">
       <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1073.5 385.1" style="width:100%;max-width:220px;margin:0 auto;display:block" role="img" aria-label="Futuro soundwave f-clef lockup"><style>@import url('https://fonts.googleapis.com/css2?family=Syne:wght@500;700&display=swap');</style><defs><linearGradient id="fcloging" gradientUnits="userSpaceOnUse" x1="0" y1="98" x2="0" y2="449"><stop offset="0" stop-color="#41A36B"/><stop offset="0.52" stop-color="#257F4B"/><stop offset="1" stop-color="#136131"/></linearGradient><filter id="fcloginglow" x="-14%" y="-48%" width="128%" height="196%" color-interpolation-filters="sRGB"><feFlood flood-color="#41A36B" result="col"/><feGaussianBlur in="SourceAlpha" stdDeviation="3.33" result="a1"/><feGaussianBlur in="SourceAlpha" stdDeviation="8.33" result="a2"/><feGaussianBlur in="SourceAlpha" stdDeviation="16.67" result="a3"/><feComposite in="col" in2="a1" operator="in" result="g1"/><feComposite in="col" in2="a2" operator="in" result="g2"/><feComposite in="col" in2="a3" operator="in" result="g3"/><feMerge><feMergeNode in="g3"/><feMergeNode in="g2"/><feMergeNode in="g2"/><feMergeNode in="g1"/></feMerge></filter></defs><g transform="translate(-519.3 -85.5)"><use href="#fcloginw" xlink:href="#fcloginw" filter="url(#fcloginglow)" opacity="0.6" style="pointer-events:none"/><g id="fcloginw" fill="url(#fcloging)"><g><rect data-fcbar="C0" x="-12.50" y="-3.04" width="25.00" height="6.07" rx="3.04" transform="translate(654.5,138) rotate(89.76)"/><rect data-fcbar="C1" x="-14.50" y="-3.00" width="29.00" height="6.00" rx="3.00" transform="translate(663.5,140) rotate(90)"/><rect data-fcbar="C2" x="-12.00" y="-3.00" width="24.00" height="6.01" rx="3.00" transform="translate(646.5,138.5) rotate(89.98)"/><rect data-fcbar="C3" x="-12.00" y="-3.00" width="24.00" height="6.00" rx="3.00" transform="translate(637.5,139.5) rotate(90)"/><rect data-fcbar="C4" x="-16.52" y="-3.14" width="33.03" height="6.28" rx="3.14" transform="translate(672.41,143.99) rotate(89.05)"/><rect data-fcbar="C5" x="-22.01" y="-3.19" width="44.02" height="6.38" rx="3.19" transform="translate(680.56,151.51) rotate(89.23)"/><rect data-fcbar="C6" x="-12.50" y="-3.01" width="25.00" height="6.02" rx="3.01" transform="translate(627.5,143) rotate(89.94)"/><rect data-fcbar="C7" x="-31.50" y="-3.06" width="63.00" height="6.13" rx="3.06" transform="translate(689.5,165) rotate(89.86)"/><rect data-fcbar="C8" x="-13.00" y="-3.00" width="26.00" height="6.00" rx="3.00" transform="translate(617.5,147.5) rotate(90)"/><rect data-fcbar="C9" x="-94.00" y="-3.54" width="188.00" height="7.08" rx="3.54" transform="translate(697.84,232.5) rotate(89.85)"/><rect data-fcbar="C10" x="-14.51" y="-3.57" width="29.01" height="7.14" rx="3.57" transform="translate(607.98,154) rotate(-89.52)"/><rect data-fcbar="C11" x="-85.00" y="-3.07" width="170.00" height="6.14" rx="3.07" transform="translate(706.5,229.5) rotate(89.95)"/><rect data-fcbar="C12" x="-17.00" y="-3.06" width="34.00" height="6.12" rx="3.06" transform="translate(598.49,162.5) rotate(-89.74)"/><rect data-fcbar="C13" x="-42.51" y="-3.69" width="85.02" height="7.39" rx="3.69" transform="translate(588.84,196) rotate(89.23)"/><rect data-fcbar="C14" x="-73.00" y="-3.67" width="146.00" height="7.34" rx="3.67" transform="translate(714.98,226.5) rotate(89.54)"/><rect data-fcbar="C15" x="-35.01" y="-3.83" width="70.02" height="7.66" rx="3.83" transform="translate(579.39,196.51) rotate(89.18)"/><rect data-fcbar="C16" x="-58.00" y="-3.08" width="116.00" height="6.15" rx="3.08" transform="translate(723.5,223.5) rotate(89.91)"/><rect data-fcbar="C17" x="-25.54" y="-3.53" width="51.08" height="7.06" rx="3.53" transform="translate(569.91,196.03) rotate(87.56)"/><rect data-fcbar="C18" x="-32.50" y="-3.60" width="65.00" height="7.19" rx="3.60" transform="translate(607.99,212) rotate(89.8)"/><rect data-fcbar="C19" x="-32.00" y="-3.02" width="64.00" height="6.04" rx="3.02" transform="translate(617.5,211.5) rotate(89.96)"/><rect data-fcbar="C20" x="-39.50" y="-3.12" width="79.00" height="6.24" rx="3.12" transform="translate(731.47,221) rotate(89.76)"/><rect data-fcbar="C21" x="-27.50" y="-3.04" width="55.00" height="6.07" rx="3.04" transform="translate(626.5,210) rotate(89.92)"/><rect data-fcbar="C22" x="-29.00" y="-3.02" width="58.00" height="6.04" rx="3.02" transform="translate(598.5,213.5) rotate(89.96)"/><rect data-fcbar="C23" x="-18.00" y="-2.53" width="36.00" height="5.06" rx="2.53" transform="translate(635,208.5) rotate(89.89)"/><rect data-fcbar="C24" x="0.00" y="-3.00" width="0.00" height="6.00" rx="0.00" transform="translate(563.5,311) rotate(90)"/><rect data-fcbar="C25" x="-43.02" y="-3.61" width="86.03" height="7.22" rx="3.61" transform="translate(688.74,298.5) rotate(89.31)"/><rect data-fcbar="C26" x="-33.01" y="-3.20" width="66.02" height="6.40" rx="3.20" transform="translate(679.45,319.5) rotate(89.53)"/><rect data-fcbar="C27" x="-27.50" y="-3.52" width="55.00" height="7.03" rx="3.52" transform="translate(670.97,334) rotate(89.89)"/><rect data-fcbar="C28" x="-25.00" y="-3.06" width="50.01" height="6.13" rx="3.06" transform="translate(661.5,345.5) rotate(89.82)"/><rect data-fcbar="C29" x="-22.00" y="-3.02" width="44.00" height="6.05" rx="3.02" transform="translate(652.5,356.5) rotate(-89.92)"/><rect data-fcbar="C30" x="-19.00" y="-3.04" width="38.01" height="6.09" rx="3.04" transform="translate(643.5,365.5) rotate(89.83)"/><rect data-fcbar="C31" x="-17.50" y="-3.05" width="35.01" height="6.10" rx="3.05" transform="translate(635.49,373) rotate(-89.79)"/><rect data-fcbar="C32" x="-16.00" y="-3.00" width="32.00" height="6.00" rx="3.00" transform="translate(626.5,380.5) rotate(90)"/><rect data-fcbar="C33" x="-14.51" y="-3.06" width="29.01" height="6.11" rx="3.06" transform="translate(617.52,386.99) rotate(-89.61)"/><rect data-fcbar="C34" x="-13.00" y="-3.00" width="26.00" height="6.00" rx="3.00" transform="translate(609.5,392.5) rotate(90)"/><rect data-fcbar="C35" x="-12.50" y="-2.52" width="25.00" height="5.05" rx="2.52" transform="translate(602,397) rotate(89.87)"/><rect data-fcbar="C36" x="-11.53" y="-3.15" width="23.06" height="6.31" rx="3.15" transform="translate(594.48,402) rotate(-88.71)"/><rect data-fcbar="C37" x="-10.01" y="-2.56" width="20.01" height="5.11" rx="2.56" transform="translate(586,406.51) rotate(89.59)"/><rect data-fcbar="C38" x="-9.00" y="-2.50" width="18.00" height="5.00" rx="2.50" transform="translate(578,412.5) rotate(90)"/><rect data-fcbar="C39" x="-7.53" y="-3.07" width="15.06" height="6.14" rx="3.07" transform="translate(570.57,417.98) rotate(-87.89)"/><rect data-fcbar="C40" x="-6.03" y="-2.58" width="12.06" height="5.17" rx="2.58" transform="translate(562.01,424.51) rotate(88.77)"/></g><g><rect data-fcbar="D0" x="-19.50" y="-3.03" width="39.00" height="6.06" rx="3.03" transform="translate(770.5,187) rotate(-89.87)"/><rect data-fcbar="D1" x="-18.00" y="-2.52" width="36.00" height="5.03" rx="2.52" transform="translate(763,187.5) rotate(89.94)"/><rect data-fcbar="D2" x="-18.00" y="-3.06" width="36.00" height="6.13" rx="3.06" transform="translate(777.49,187.5) rotate(89.72)"/><rect data-fcbar="D3" x="-10.51" y="-2.05" width="21.01" height="4.10" rx="2.05" transform="translate(784.5,187) rotate(-89.68)"/><rect data-fcbar="D4" x="-10.01" y="-2.58" width="20.02" height="5.16" rx="2.58" transform="translate(756.02,187.5) rotate(89.34)"/><rect data-fcbar="D5" x="-20.00" y="-2.51" width="40.00" height="5.03" rx="2.51" transform="translate(770.48,254.5) rotate(89.73)"/><rect data-fcbar="D6" x="-18.50" y="-2.52" width="37.00" height="5.03" rx="2.52" transform="translate(763,255) rotate(89.94)"/><rect data-fcbar="D7" x="-18.50" y="-3.10" width="37.01" height="6.20" rx="3.10" transform="translate(777.47,255) rotate(89.54)"/><rect data-fcbar="D8" x="-11.01" y="-2.58" width="22.01" height="5.15" rx="2.58" transform="translate(756,254.5) rotate(89.48)"/><rect data-fcbar="D9" x="-10.52" y="-2.65" width="21.04" height="5.31" rx="2.65" transform="translate(784.06,255) rotate(-88.65)"/></g></g><g opacity="0.4" fill="#F6F8F7" style="pointer-events:none"></g></g><text x="277.7" y="195.6" font-family="'Syne',sans-serif" font-weight="700" font-size="170" letter-spacing="9" fill="#F6F8F7">UTURO</text><text x="566.8" y="271.2" font-family="'Syne',sans-serif" font-weight="700" font-size="72" letter-spacing="24" fill="#7FA98C">OS_</text></svg>
     </div>
     <div id="ff-auth-err" style="display:none;background:rgba(220,38,38,.12);border:1px solid rgba(248,113,113,.3);color:#f87171;font-size:12px;padding:9px 12px;border-radius:8px;margin-bottom:14px"></div>
-    <label style="display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#5f6877;margin-bottom:6px">Email</label>
+    <label for="ff-email" style="display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#5f6877;margin-bottom:6px">Email</label>
     <input id="ff-email" type="email" autocomplete="username" style="width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);color:#e9ecf1;font-size:14px;padding:11px 13px;border-radius:9px;margin-bottom:14px;box-sizing:border-box" />
-    <label style="display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#5f6877;margin-bottom:6px">Password</label>
+    <label for="ff-pass" style="display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#5f6877;margin-bottom:6px">Password</label>
     <input id="ff-pass" type="password" autocomplete="current-password" style="width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);color:#e9ecf1;font-size:14px;padding:11px 13px;border-radius:9px;margin-bottom:20px;box-sizing:border-box" />
     <button id="ff-login-btn" style="width:100%;background:linear-gradient(135deg,#3b72ff,#1e50d8);color:#fff;font-weight:600;font-size:14px;border:none;padding:12px;border-radius:9px;cursor:pointer;margin-bottom:10px;box-shadow:0 2px 14px rgba(59,114,255,.42)">Sign In</button>
     <button id="ff-signup-btn" style="width:100%;background:rgba(255,255,255,.04);color:#9aa3b2;font-weight:500;font-size:13px;border:1px solid rgba(255,255,255,.12);padding:10px;border-radius:9px;cursor:pointer">Create Account</button>
@@ -1698,7 +1704,7 @@ function closeModal(){
   const e=document.getElementById('ff-modal-ov');
   if(e){ e.remove(); if(_modalPrevFocus&&typeof _modalPrevFocus.focus==='function'){ try{_modalPrevFocus.focus();}catch(_){} } _modalPrevFocus=null; }
 }
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+document.addEventListener('keydown',e=>{ if(e.key!=='Escape')return; const modal=document.getElementById('ff-modal-ov'); if(modal){ closeModal(); } else { const sb=document.getElementById('sidebar'); if(sb&&sb.classList.contains('open')) toggleSidebar(false); } });
 
 // field helpers (consistent styling)
 const _fLabel='display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3,#5f6877);margin-bottom:5px;margin-top:14px';
@@ -2240,7 +2246,7 @@ function rNav(){
     const gBadge=g.items.reduce((a,n)=>{const b=_navBadgeOf(n,ov);return a+(b?b.n:0);},0);
     const items=g.items.map(n=>{
       const b=_navBadgeOf(n,ov);
-      return`<button class="nb${page===n.id?' active':''}" onclick="go('${n.id}')" ${page===n.id?'aria-current="page"':''}><i class="ti ${n.ic}" aria-hidden="true"></i>${n.lb}${b?`<span class="nbadge" style="${b.style}" aria-label="${b.n} items need attention">${b.n}</span>`:''}</button>`;
+      return`<button class="nb${page===n.id?' active':''}" onclick="go('${n.id}',{userNav:true})" ${page===n.id?'aria-current="page"':''}><i class="ti ${n.ic}" aria-hidden="true"></i>${n.lb}${b?`<span class="nbadge" style="${b.style}" aria-label="${b.n} items need attention">${b.n}</span>`:''}</button>`;
     }).join('');
     return`<div class="nav-group${activeIn?' has-active':''}">
       <button class="nav-group-head" aria-expanded="${open}" onclick="toggleNavGroup('${g.id}')"><i class="ti ${g.ic}" aria-hidden="true"></i><span>${g.lb}</span>${!open&&gBadge>0?`<span class="nbadge">${gBadge}</span>`:''}${!open&&activeIn?'<span class="nav-active-dot" aria-hidden="true"></span>':''}<i class="ti ti-chevron-right nav-chev${open?' open':''}" aria-hidden="true"></i></button>
@@ -2249,24 +2255,62 @@ function rNav(){
   }).join('');
 }
 function toggleNavGroup(id){ if(navOpen.has(id))navOpen.delete(id); else navOpen.add(id); rNav(); }
-function toggleSidebar(force){
+function toggleSidebar(force,opts){
   const sb=document.getElementById('sidebar'), ovl=document.getElementById('nav-ovl'), tg=document.getElementById('nav-toggle');
-  const open=(force!==undefined)?!!force:!sb.classList.contains('open');
+  const mobile=window.matchMedia('(max-width:760px)').matches;
+  const wasOpen=sb.classList.contains('open');
+  const open=(force!==undefined)?!!force:!wasOpen;
   sb.classList.toggle('open',open);
   if(ovl)ovl.hidden=!open;
   if(tg)tg.setAttribute('aria-expanded',String(open));
+  if(mobile){
+    document.body.classList.toggle('nav-open',open);
+    if(open){
+      sb.inert=false; sb.removeAttribute('aria-hidden');
+      if(!wasOpen){ const first=sb.querySelector('#nav .nb, #nav .nav-group-head'); if(first)first.focus(); }
+    }else{
+      sb.inert=true;
+      if(wasOpen&&tg&&!(opts&&opts.returnFocus===false))tg.focus();
+    }
+  }else{
+    sb.inert=false; sb.removeAttribute('aria-hidden'); document.body.classList.remove('nav-open');
+  }
 }
-function go(p){
+(function(){
+  const sb=document.getElementById('sidebar'); if(!sb)return;
+  const isMobile=window.matchMedia('(max-width:760px)').matches;
+  if(isMobile&&!sb.classList.contains('open')){ sb.inert=true; }
+  else{ sb.inert=false; sb.removeAttribute('aria-hidden'); }
+  const mq=window.matchMedia('(max-width:760px)');
+  const onBpChange=e=>{
+    const sb=document.getElementById('sidebar'); if(!sb)return;
+    if(!e.matches){
+      sb.inert=false; sb.removeAttribute('aria-hidden'); sb.classList.remove('open');
+      document.body.classList.remove('nav-open');
+      const ovl=document.getElementById('nav-ovl'); if(ovl)ovl.hidden=true;
+      const tg=document.getElementById('nav-toggle'); if(tg)tg.setAttribute('aria-expanded','false');
+    }else{
+      const open=sb.classList.contains('open');
+      sb.inert=!open;
+      document.body.classList.toggle('nav-open',open);
+    }
+  };
+  if(mq.addEventListener)mq.addEventListener('change',onBpChange);
+  else if(mq.addListener)mq.addListener(onBpChange);
+})();
+function go(p,opts){
   page=p;sel=null;selJob=null;gcSel=null;
   document.body.setAttribute('data-page',p);
   const m=PM[p]||{t:p,s:''};
   document.getElementById('pt').textContent=m.t;
   document.getElementById('ps').textContent=m.s;
   const grp=navGroupOf(p); if(grp)navOpen.add(grp);
-  toggleSidebar(false);
+  toggleSidebar(false, (opts&&opts.userNav)?{returnFocus:false}:undefined);
   renderHelpBar(p);
   rNav();rPage();
   const c=document.getElementById('content'); if(c)c.scrollTop=0;
+  if(window.matchMedia('(max-width:760px)').matches) window.scrollTo(0,0);
+  if(opts && opts.userNav && c){ c.setAttribute('aria-label', (m&&m.t)?m.t:''); c.focus({preventScroll:true}); }
 }
 function rPage(){if(selJob){rJobDetail();return;}if(sel){rDetail();return;}if(gcSel){rGCDetail();return;}({dashboard:rDash,leads:rLeads,inbox:rInbox,pipeline:rPipe,analytics:rAnalytics,carriers:rCarriers,tasks:rTasks,loadtool:rLoadTool,settings:rSettings,checklist:rChecklist,outreach:rOutreach,quoting:rQuoting,negotiation:rNegotiation,vetting:rVetting,float:rFloat,loadsdocs:rLoadsDocs,
 control:rControl,livejobs:rLiveJobs,exceptions:rExceptions,kpi:rKpi,neworder:rNewOrder,recurring:rRecurring,classifier:rClassifier,matrix:rMatrix,vehicles:rVehicles,routes:rRoutes,postal:rPostal,deliveries:rDeliveries,dispatch:rDispatchBoard,secure:rSecure,govconops:rGovConOps,sortstage:rSortStage,pod:rPOD,

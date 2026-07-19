@@ -1,0 +1,34 @@
+{
+  "base_commit": "5b20c8df961292e6426e69071668de94aed91441",
+  "note": "Deterministic base hashes for Phase-1 protected surfaces. Regenerate ONLY from clean base 5b20c8d.",
+  "mobile_files": {
+    "mobile/app.js": "cfa566ec0440b190a001eecebb1220665fcc3cae85763aab7029ce7ef2694db3",
+    "mobile/icons/icon-180.png": "52951320b4215c09e4c02bba1222792f0c7a81b656c9456b0e37d53a74bd011a",
+    "mobile/icons/icon-192.png": "d114f8275028d9b5b738476e68bcec29c0754ca9568d869ac6c029446c9f0a8e",
+    "mobile/icons/icon-512.png": "b578817c810bef97bd6f9a6ae4974d1cbfcb1a1d0e7bd6e2645ed3797c2c1339",
+    "mobile/icons/icon.svg": "b535b81ab64b84e1bc0a16b9653a754200bb8f31b00e7f991197cf66e5e0fb73",
+    "mobile/icons/mark.svg": "a5f7c351afe72b0bb11f7f9c3cd371052b07b3b383a0e1ed573e1a34087c2a23",
+    "mobile/index.html": "c3bdbb43c16bcd6506c6fd8db1515077b0eedbb6ba0806a58cbbcf8dbe86cee2",
+    "mobile/manifest.webmanifest": "016099b619496ad2c2d5f1081663b5b76c3b8ea3a91ef8dcced7f80abcec5ad1",
+    "mobile/styles.css": "0954e53adf2e8cb43c9e539cacdad1d4201a1a446db486a72d83db9d3b09204c",
+    "mobile/sw.js": "32ed8320f41d73c1b219d755f444a09738c7557731ed1d31a9a41d4ff8bc03f4",
+    "mobile/vendor/jspdf.umd.min.js": "85ba2cc3ff858a20fa49fe6e457bec863ea40b55a9f3725e58a940e62f6f61a4",
+    "mobile/vendor/leaflet/LICENSE": "53e8dc25862014e4324741ca18fbe3611e11d42ef69f59f86ea8c5389647d4cb",
+    "mobile/vendor/leaflet/images/layers-2x.png": "066daca850d8ffbef007af00b06eac0015728dee279c51f3cb6c716df7c42edf",
+    "mobile/vendor/leaflet/images/layers.png": "1dbbe9d028e292f36fcba8f8b3a28d5e8932754fc2215b9ac69e4cdecf5107c6",
+    "mobile/vendor/leaflet/images/marker-icon-2x.png": "00179c4c1ee830d3a108412ae0d294f55776cfeb085c60129a39aa6fc4ae2528",
+    "mobile/vendor/leaflet/images/marker-icon.png": "574c3a5cca85f4114085b6841596d62f00d7c892c7b03f28cbfa301deb1dc437",
+    "mobile/vendor/leaflet/images/marker-shadow.png": "264f5c640339f042dd729062cfc04c17f8ea0f29882b538e3848ed8f10edb4da",
+    "mobile/vendor/leaflet/leaflet.css": "a7837102824184820dfa198d1ebcd109ff6d0ff9a2672a074b9a1b4d147d04c6",
+    "mobile/vendor/leaflet/leaflet.js": "db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a"
+  },
+  "mobile_ops_anchor": {
+    "literal": "<a href=\"mobile/\" target=\"_blank\" rel=\"noopener\" class=\"nb\" style=\"text-decoration:none;margin-bottom:8px\"><i class=\"ti ti-device-mobile\" aria-hidden=\"true\"></i>Mobile Ops</a>",
+    "sha256": "42c9c6ff6b84ec3a7c610e38bc1eb5c2f78b5b11b4decda0f6fd90ef08d3c4f4"
+  },
+  "auth_block": {
+    "start_marker": "/* ===== FUTUROFREIGHT SUPABASE CONFIG ===== */",
+    "end_marker": "\n\n<div class=\"app\">",
+    "sha256": "b87905034ca5f97f09195ceed91aa007be07af6d7b42883496efb99c301ca967"
+  }
+}
