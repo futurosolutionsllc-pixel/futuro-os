@@ -1,16 +1,21 @@
 #!/usr/bin/env node
 /*
- * S2-B static check — Mobile Ops in-place navigation + detail-sheet scroll reset.
+ * S2-B static check — job-detail sheet scroll-reset regression (photo-only).
  *
- * Self-contained. No dependencies. Does NOT depend on any S2-A script.
+ * Self-contained. Uses only Node built-ins (fs, path). No dependencies.
+ * Scoped entirely to openDetail() in mobile/app.js; does NOT read index.html
+ * and makes NO claim about Mobile Ops navigation (that change was reverted).
  *
- * Verifies, narrowly and scoped to the specific anchor / function:
- *   1. The Mobile Ops anchor retains href="mobile/".
- *   2. That same anchor has no target="_blank".
- *   3. That same anchor has no rel="noopener".
- *   4. openDetail() makes the detail sheet visible.
- *   5. openDetail() queries the .sheet-card scroll container.
- *   6. scrollTop = 0 occurs after hidden = false.
+ * Verifies, narrowly and scoped to the brace-matched openDetail() body:
+ *   1. openDetail() is found via brace-matched function-body extraction.
+ *   2. The detail sheet is made visible (detailSheet.hidden = false).
+ *   3. .sheet-card is queried into a named scroller variable.
+ *   4. That same named variable receives scrollTop = 0.
+ *   5. The scroll reset occurs after hidden = false.
+ *   6. The scroll reset occurs before later detail-view event/focus/
+ *      animation/positioning logic (the first handler wiring).
+ *
+ * Exits nonzero on any failure.
  *
  * Usage: node tests/s2b-static-check.js [repoPath]
  *   repoPath is optional and defaults to the current working directory.
@@ -21,27 +26,11 @@ const fs = require('fs');
 const path = require('path');
 
 const repo = process.argv[2] || process.cwd();
-const indexPath = path.join(repo, 'index.html');
 const appPath = path.join(repo, 'mobile', 'app.js');
 
-const indexSrc = fs.readFileSync(indexPath, 'utf8');
 const appSrc = fs.readFileSync(appPath, 'utf8');
 
-/* --- Scope 1: isolate the Mobile Ops anchor only ---
- * Find the single <a ...>...Mobile Ops...</a> so unrelated markup can't
- * create a false pass/fail. */
-let mobileAnchor = null;
-const anchorRe = /<a\b[^>]*>[\s\S]*?<\/a>/gi;
-let m;
-while ((m = anchorRe.exec(indexSrc)) !== null) {
-  if (/Mobile Ops/.test(m[0])) { mobileAnchor = m[0]; break; }
-}
-// The attribute checks must run against the opening tag specifically.
-const mobileOpenTag = mobileAnchor
-  ? (mobileAnchor.match(/<a\b[^>]*>/i) || [null])[0]
-  : null;
-
-/* --- Scope 2: isolate the openDetail() function body only --- */
+/* --- Isolate the openDetail() function body only, via brace matching. --- */
 let openDetailBody = null;
 const fnStart = appSrc.indexOf('function openDetail(');
 if (fnStart !== -1) {
@@ -60,28 +49,50 @@ if (fnStart !== -1) {
   }
 }
 
-/* --- Ordering helper: scrollTop reset after hidden = false --- */
-let scrollAfterVisible = false;
+/* --- Index of "detailSheet.hidden = false" (sheet made visible). --- */
+const hiddenIdx = openDetailBody
+  ? openDetailBody.search(/\$\(\s*['"]detailSheet['"]\s*\)\s*\.hidden\s*=\s*false/)
+  : -1;
+
+/* --- Capture the variable that receives the .sheet-card query result. ---
+ * e.g.  const detailScroller = $('detailSheet').querySelector('.sheet-card');
+ * We capture "detailScroller" so we can prove the SAME object is scrolled. */
+let scrollerVar = null;
 if (openDetailBody) {
-  const hiddenIdx = openDetailBody.search(/\$\(\s*['"]detailSheet['"]\s*\)\s*\.hidden\s*=\s*false/);
-  const scrollIdx = openDetailBody.search(/\.scrollTop\s*=\s*0/);
-  scrollAfterVisible = hiddenIdx !== -1 && scrollIdx !== -1 && scrollIdx > hiddenIdx;
+  const assign = openDetailBody.match(
+    /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*[^;]*\.querySelector\(\s*['"]\.sheet-card['"]\s*\)/
+  );
+  if (assign) scrollerVar = assign[1];
+}
+
+/* --- Index of "<scrollerVar>.scrollTop = 0" — the SAME variable. --- */
+let boundScrollIdx = -1;
+if (openDetailBody && scrollerVar) {
+  const boundRe = new RegExp('\\b' + scrollerVar + '\\s*\\.scrollTop\\s*=\\s*0');
+  boundScrollIdx = openDetailBody.search(boundRe);
+}
+
+/* --- Index of the first later detail-view handler/focus/positioning logic.
+ * The scroll reset must land before this wiring. We match the earliest of an
+ * onclick handler, a .focus( call, or an .addEventListener( call. --- */
+let laterLogicIdx = -1;
+if (openDetailBody) {
+  laterLogicIdx = openDetailBody.search(/\.onclick\b|\.focus\s*\(|\.addEventListener\s*\(/);
 }
 
 const checks = [
-  ['Mobile Ops anchor found in index.html', mobileOpenTag !== null],
-  ['1. Mobile Ops anchor retains href="mobile/"',
-    mobileOpenTag !== null && /href\s*=\s*"mobile\/"/.test(mobileOpenTag)],
-  ['2. Mobile Ops anchor has no target="_blank"',
-    mobileOpenTag !== null && !/target\s*=/i.test(mobileOpenTag)],
-  ['3. Mobile Ops anchor has no rel="noopener"',
-    mobileOpenTag !== null && !/rel\s*=/i.test(mobileOpenTag)],
-  ['openDetail() function body found in mobile/app.js', openDetailBody !== null],
-  ['4. openDetail() makes the detail sheet visible',
-    openDetailBody !== null && /\$\(\s*['"]detailSheet['"]\s*\)\s*\.hidden\s*=\s*false/.test(openDetailBody)],
-  ['5. openDetail() queries the .sheet-card scroll container',
-    openDetailBody !== null && /querySelector\(\s*['"]\.sheet-card['"]\s*\)/.test(openDetailBody)],
-  ['6. scrollTop = 0 occurs after hidden = false', scrollAfterVisible]
+  ['1. openDetail() function body found (brace-matched)',
+    openDetailBody !== null],
+  ['2. openDetail() makes the detail sheet visible (hidden = false)',
+    hiddenIdx !== -1],
+  ['3. .sheet-card is queried into a named scroller variable',
+    scrollerVar !== null],
+  ['4. that same variable (' + (scrollerVar || '?') + ') receives scrollTop = 0',
+    scrollerVar !== null && boundScrollIdx !== -1],
+  ['5. scroll reset occurs after hidden = false',
+    hiddenIdx !== -1 && boundScrollIdx !== -1 && boundScrollIdx > hiddenIdx],
+  ['6. scroll reset occurs before later event/focus/positioning logic',
+    boundScrollIdx !== -1 && laterLogicIdx !== -1 && boundScrollIdx < laterLogicIdx]
 ];
 
 let failures = 0;
