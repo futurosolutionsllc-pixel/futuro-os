@@ -1446,7 +1446,7 @@ img.ph{max-width:180px;max-height:180px;border:1px solid #ddd;border-radius:6px;
 <div class="sec">Custody timeline</div>
 <table><tr><th style="width:190px">Time</th><th>Event</th></tr>${(j.events || []).map(fmtEvt).join('')}</table>
 ${p.signature ? `<div class="sec">Recipient signature</div><img class="sig" src="${p.signature}" alt="signature">` : ''}
-${p.photos?.length ? `<div class="sec">Photos (${p.photos.length})</div>${p.photos.map(ph => `<img class="ph" src="${ph}">`).join('')}` : ''}
+${p.photos?.length ? `<div class="sec">Photos (${p.photos.length})</div>${p.photos.map((ph, i) => `<img class="ph" src="${ph}" alt="Delivery photo ${i + 1} of ${p.photos.length}">`).join('')}` : ''}
 ${p.hash ? `<div class="sec">Record integrity (SHA-256)</div><div class="hash">${p.hash}</div>
 <div class="foot">This fingerprint was computed from the custody facts above at the moment of completion. Recomputing it over the same facts must produce the same value — any alteration of this record changes the fingerprint.</div>` : ''}
 <div class="foot">Generated ${new Date().toLocaleString()} by ${esc(s.company)} · Futuro OS Mobile Ops</div>
