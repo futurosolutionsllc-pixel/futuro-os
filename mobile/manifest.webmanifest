@@ -1,6 +1,6 @@
 {
-  "name": "Futuro OS — Mobile Ops",
-  "short_name": "Futuro OS",
+  "name": "Futuro_OS — Mobile Ops",
+  "short_name": "Futuro_OS",
   "description": "Solo owner/operator delivery platform: routes, ETAs, proof of delivery, customer texts, analytics.",
   "start_url": "./index.html",
   "scope": "./",
