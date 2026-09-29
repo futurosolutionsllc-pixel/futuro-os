@@ -1,0 +1,784 @@
+--- a/.claude/FUTURO-AGENT-MATRIX.md
++++ b/.claude/FUTURO-AGENT-MATRIX.md
+@@ -1,25 +1,58 @@
+ # FuturoOS Agent Matrix
+ 
+-> Companion to [`FUTURO-AGENT-GOVERNANCE.md`](FUTURO-AGENT-GOVERNANCE.md) and root
+-> [`../CLAUDE.md`](../CLAUDE.md). Defines the **15 planned** FuturoOS agents. This is a planning and
+-> authority reference; it does **not** create or modify any active agent definition. Active agent files
+-> (`.claude/agents/*`) are out of scope for this document and are unchanged.
++> Companion to
++> [`FUTURO-AGENT-GOVERNANCE.md`](FUTURO-AGENT-GOVERNANCE.md) and root
++> [`../CLAUDE.md`](../CLAUDE.md). Documents the **15 installed, active**
++> FuturoOS agent definitions under `.claude/agents/*`. This is the current
++> authority and routing reference; it does **not** itself create, invoke, or
++> execute an agent.
++>
++> **Operating mode:** autonomous orchestration is disabled (P1/manual-only).
++> The owner manually launches every agent and manually transfers every handoff.
++> Each downstream agent named below is an owner-routing recommendation, never
++> an autonomous invocation (Governance §36).
++>
++> **Installation versus smoke tests:** the owner has reported that all 15
++> installed agents completed individual smoke tests (owner-supplied result).
++> Static file inspection confirms installation and definition contents only;
++> it does not independently reproduce those smoke tests.
++>
++> The canonical 17-field structured handoff contract is defined in
++> [`FUTURO-AGENT-GOVERNANCE.md`](FUTURO-AGENT-GOVERNANCE.md) §30 and is
++> referenced, not duplicated, here.
+ 
+ ---
+ 
+ ## Global policy (applies to every agent below)
+ 
+-- **MCP access:** none. MCP is default-deny for all project subagents (governance §13). When active
+-  definitions are authored later, this is enforced via explicit minimum `tools:` allowlists that omit MCP
+-  tools — never via undocumented wildcard MCP syntax.
+-- **Persistent memory:** none. No `memory` field is configured during the pilot (governance §14).
+-- **Model identifiers:** only the supported Claude Code aliases `opus` and `sonnet` are used.
+-- **Shared prohibitions (all agents):** no autonomous `commit`, `push`, `pull`, `checkout`, `merge`,
+-  deploy, Supabase mutation (`execute_sql` / `apply_migration`), production-data modification, credential
+-  creation/rotation/revocation, dependency installation, external communication (email/message), or data
+-  deletion. All such actions are owner-gated (governance §33).
+-- **Read-only git inspection** (`status`, `fetch`, `check-ignore`, `ls-remote`, `rev-list`) is permitted
+-  where an agent needs repository context; it never includes state-changing git commands.
++- **Operating mode:** P1/manual-only. Autonomous orchestration is disabled;
++  the owner manually launches every agent and transfers every handoff
++  (Governance §36).
++- **Installed tools:** eleven agents declare `Read, Grep, Glob`; four declare
++  `Read, Grep, Glob, Edit, Write`. No agent declares Bash, WebSearch,
++  WebFetch, browser automation, MCP, or agent-executed Git.
++- **MCP access:** agent definitions grant no MCP tools. Current settings and
++  hook enforcement restrict further. P1 does not rely on one wildcard setting
++  as the sole control (Governance §§13, 37, 42).
++- **Persistent memory:** none. No installed definition configures a `memory`
++  field (Governance §14).
++- **Model identifiers:** only the supported Claude Code aliases `opus` and
++  `sonnet` are used.
++- **Shared prohibitions:** no autonomous `commit`, `push`, `pull`, `checkout`,
++  `merge`, deployment, Supabase mutation, production-data modification,
++  credential operations, dependency installation, external communication, or
++  deletion. All such actions remain owner-gated (Governance §33).
++- **Execution evidence:** no installed agent can execute Git commands, shell
++  commands, tests, servers, browsers, deployments, database mutations, MCP
++  calls, or live-service actions. Required execution evidence is owner-supplied
++  or supplied by another independently authorized source (Governance §38).
++- **Write scope:** the four Edit/Write-capable agents remain bound by both the
++  technically enforced non-protected repository scope and the narrower
++  owner-approved task/file scope. Only one implementation writer operates on
++  a task at a time (Governance §39).
++- **Enforcement layering:** frontmatter, settings, the PreToolUse hook, and
++  procedural owner-approved scope can each restrict further. The narrowest
++  effective restriction governs (Governance §37).
+ 
+ ### Model assignment summary
+ 
+@@ -59,8 +92,10 @@
+ - **Authority:** Advisory. Proposes; does not decide or implement.
+ - **Owned decisions:** Product framing, prioritization recommendations, scope proposals.
+ - **Prohibited decisions:** Any code, source-control, deployment, data, or production action; approving scope.
+-- **Allowed tools:** Read, Grep, Glob; WebSearch/WebFetch (research); read-only git inspection.
+-- **Disallowed tools:** Edit, Write, browser-drive, deploy, DB/Supabase, credentials, messaging, MCP, memory.
++- **Allowed tools (installed frontmatter):** Read, Grep, Glob.
++- **Disallowed tools:** Edit, Write, Bash, WebSearch, WebFetch, browser
++  automation, agent-executed Git, deploy, DB/Supabase, credentials, messaging,
++  MCP, memory.
+ - **Model:** sonnet
+ - **Memory:** none
+ - **Expected inputs:** Owner intent, business context, existing docs.
+@@ -81,8 +116,10 @@
+ - **Authority:** Advisory planning only.
+ - **Owned decisions:** Task breakdown, sequencing, dependency mapping.
+ - **Prohibited decisions:** Implementation; committing scope; any gated action.
+-- **Allowed tools:** Read, Grep, Glob; read-only git inspection.
+-- **Disallowed tools:** Edit, Write, browser-drive, deploy, DB/Supabase, credentials, messaging, MCP, memory.
++- **Allowed tools (installed frontmatter):** Read, Grep, Glob.
++- **Disallowed tools:** Edit, Write, Bash, WebSearch, WebFetch, browser
++  automation, agent-executed Git, deploy, DB/Supabase, credentials, messaging,
++  MCP, memory.
+ - **Model:** sonnet
+ - **Memory:** none
+ - **Expected inputs:** Approved scope from product-strategist; repository context.
+@@ -103,8 +140,10 @@
+ - **Authority:** Design/advisory only.
+ - **Owned decisions:** Workflow structure, branch/failure/recovery mapping, handoff contracts.
+ - **Prohibited decisions:** Implementation; production changes; any gated action.
+-- **Allowed tools:** Read, Grep, Glob; WebSearch/WebFetch; read-only git inspection.
+-- **Disallowed tools:** Edit, Write, browser-drive, deploy, DB/Supabase, credentials, messaging, MCP, memory.
++- **Allowed tools (installed frontmatter):** Read, Grep, Glob.
++- **Disallowed tools:** Edit, Write, Bash, WebSearch, WebFetch, browser
++  automation, agent-executed Git, deploy, DB/Supabase, credentials, messaging,
++  MCP, memory.
+ - **Model:** opus
+ - **Memory:** none
+ - **Expected inputs:** Task list; product and repository context.
+@@ -125,8 +164,10 @@
+ - **Authority:** Design/advisory only.
+ - **Owned decisions:** Architecture options, trade-off analysis, ADRs.
+ - **Prohibited decisions:** Choosing to ship; introducing new frameworks/toolchains; any gated action.
+-- **Allowed tools:** Read, Grep, Glob; WebSearch/WebFetch; read-only git inspection.
+-- **Disallowed tools:** Edit, Write, browser-drive, deploy, DB/Supabase, credentials, messaging, MCP, memory.
++- **Allowed tools (installed frontmatter):** Read, Grep, Glob.
++- **Disallowed tools:** Edit, Write, Bash, WebSearch, WebFetch, browser
++  automation, agent-executed Git, deploy, DB/Supabase, credentials, messaging,
++  MCP, memory.
+ - **Model:** opus
+ - **Memory:** none
+ - **Expected inputs:** Workflow specs; task list; repository evidence.
+@@ -147,14 +188,17 @@
+ - **Authority:** Design/advisory only; no execution against Supabase.
+ - **Owned decisions:** Data-model and migration *proposals*, RLS design recommendations.
+ - **Prohibited decisions:** Executing SQL, applying migrations, altering schema/RLS, any production DB mutation.
+-- **Allowed tools:** Read, Grep, Glob (read schema/migration files); WebSearch/WebFetch; read-only git inspection.
+-- **Disallowed tools:** Edit, Write, **all Supabase MCP/SQL/migration execution**, browser-drive, deploy, credentials, messaging, MCP, memory.
++- **Allowed tools (installed frontmatter):** Read, Grep, Glob
++  (schema/migration files for design context only).
++- **Disallowed tools:** Edit, Write, Bash, **all Supabase
++  MCP/SQL/migration execution**, WebSearch, WebFetch, browser automation,
++  agent-executed Git, deploy, credentials, messaging, MCP, memory.
+ - **Model:** sonnet
+ - **Memory:** none
+ - **Expected inputs:** Architecture proposal; existing `supabase/` schema and migrations.
+ - **Required outputs:** Standard Agent Result Format; migration/data-model proposal with rollback notes.
+ - **Upstream handoff:** `futuro-app-architect`.
+-- **Downstream handoff:** Implementation agents → `futuro-release-steward`.
++- **Downstream handoff:** Owner-routed implementation and verification chain.
+ - **Escalation conditions:** Any need to actually run SQL/migrations; destructive schema/RLS implications.
+ - **Approval requirements:** Owner executes all migrations/SQL from the owner-controlled main session.
+ - **Completion criteria:** Reviewed proposal with explicit rollback and RLS considerations; nothing executed.
+@@ -169,8 +213,12 @@
+ - **Authority:** Edit approved application/UI files within task scope.
+ - **Owned decisions:** In-scope UI code implementation choices.
+ - **Prohibited decisions:** Scope expansion; broad refactoring; any gated action.
+-- **Allowed tools:** Read, Grep, Glob; Edit, Write (approved app/UI files only); read-only git inspection.
+-- **Disallowed tools:** Browser-drive, deploy, DB/Supabase, credentials, messaging, git state-changes, MCP, memory.
++- **Allowed tools (installed frontmatter):** Read, Grep, Glob, Edit, Write.
++- **Disallowed tools:** Bash, WebSearch, WebFetch, browser automation,
++  agent-executed Git, deploy, DB/Supabase, credentials, messaging, MCP, memory.
++- **Write scope (binding):** technical access is limited to in-repository,
++  non-protected files. The owner-approved file list is an additional, narrower
++  procedural limit. Only one implementation writer operates on a task.
+ - **Model:** sonnet
+ - **Memory:** none
+ - **Expected inputs:** Approved task, architecture/workflow specs, file scope.
+@@ -186,22 +234,27 @@
+ - **Canonical identifier:** `futuro-pwa-mobile-engineer`
+ - **Display name:** Futuro PWA Mobile Engineer
+ - **Source third-party agent:** `engineering-mobile-app-builder.md`
+-- **Purpose:** Implement scoped changes in the PWA under `mobile/` and verify runtime behavior.
++- **Purpose:** Implement scoped PWA changes under `mobile/`; define verification needs.
+ - **Agent class:** Implementation
+-- **Authority:** Edit approved `mobile/` files within scope; drive browser for verification.
++- **Authority:** Edit approved `mobile/` files within scope; no browser execution.
+ - **Owned decisions:** In-scope PWA implementation choices.
+ - **Prohibited decisions:** Scope expansion; deployment; any gated action.
+-- **Allowed tools:** Read, Grep, Glob; Edit, Write (approved `mobile/` files only); browser-drive (verification); read-only git inspection.
+-- **Disallowed tools:** Deploy, DB/Supabase, credentials, messaging, git state-changes, MCP, memory.
++- **Allowed tools (installed frontmatter):** Read, Grep, Glob, Edit, Write.
++- **Disallowed tools:** Bash, WebSearch, WebFetch, browser automation,
++  agent-executed Git, deploy, DB/Supabase, credentials, messaging, MCP, memory.
++- **Write scope (binding):** technical access is limited to in-repository,
++  non-protected files. The owner-approved file list is an additional, narrower
++  procedural limit. Only one implementation writer operates on a task.
+ - **Model:** sonnet
+ - **Memory:** none
+ - **Expected inputs:** Approved task, architecture specs, target environments.
+-- **Required outputs:** Standard Agent Result Format; minimal diff plus runtime observations.
++- **Required outputs:** Standard Agent Result Format; minimal diff and
++  verification plan.
+ - **Upstream handoff:** `futuro-app-architect`.
+ - **Downstream handoff:** `futuro-test-harness-engineer` / `futuro-evidence-collector`.
+ - **Escalation conditions:** Cannot verify on required physical environments; SW/manifest/persistence risk.
+ - **Approval requirements:** Owner approval for out-of-scope edits, deployment, and all gated actions.
+-- **Completion criteria:** Scoped change implemented; runtime observations captured; no self-certification.
++- **Completion criteria:** Scoped change implemented; verification gaps disclosed.
+ 
+ ## 8. `futuro-minimal-change-engineer`
+ 
+@@ -213,14 +266,18 @@
+ - **Authority:** Edit only the minimal files required by the single approved scope.
+ - **Owned decisions:** The minimal-diff approach for the approved fix.
+ - **Prohibited decisions:** Any refactor beyond scope; unrelated files; any gated action.
+-- **Allowed tools:** Read, Grep, Glob; Edit, Write (single approved scope); read-only git inspection.
+-- **Disallowed tools:** Browser-drive, deploy, DB/Supabase, credentials, messaging, git state-changes, MCP, memory.
++- **Allowed tools (installed frontmatter):** Read, Grep, Glob, Edit, Write.
++- **Disallowed tools:** Bash, WebSearch, WebFetch, browser automation,
++  agent-executed Git, deploy, DB/Supabase, credentials, messaging, MCP, memory.
++- **Write scope (binding):** technical access is limited to in-repository,
++  non-protected files. The owner-approved file list is an additional, narrower
++  procedural limit. Only one implementation writer operates on a task.
+ - **Model:** sonnet
+ - **Memory:** none
+ - **Expected inputs:** Single well-defined task and file scope.
+ - **Required outputs:** Standard Agent Result Format; minimal diff.
+ - **Upstream handoff:** `futuro-task-planner`.
+-- **Downstream handoff:** `futuro-evidence-collector` / `futuro-reality-checker`.
++- **Downstream handoff:** `futuro-test-harness-engineer` / `futuro-evidence-collector`.
+ - **Escalation conditions:** Fix cannot be achieved without exceeding the minimal scope.
+ - **Approval requirements:** Owner approval for any scope expansion and all gated actions.
+ - **Completion criteria:** Problem fixed with the minimum verified change; no scope creep.
+@@ -235,14 +292,16 @@
+ - **Authority:** Findings and remediation guidance only.
+ - **Owned decisions:** Accessibility findings, severity, remediation recommendations.
+ - **Prohibited decisions:** Applying production changes; any gated action.
+-- **Allowed tools:** Read, Grep, Glob; browser-drive (accessibility checks); WebSearch/WebFetch; read-only git inspection.
+-- **Disallowed tools:** Edit, Write, deploy, DB/Supabase, credentials, messaging, git state-changes, MCP, memory.
++- **Allowed tools (installed frontmatter):** Read, Grep, Glob.
++- **Disallowed tools:** Edit, Write, Bash, WebSearch, WebFetch, browser
++  automation, agent-executed Git, deploy, DB/Supabase, credentials, messaging,
++  MCP, memory.
+ - **Model:** sonnet
+ - **Memory:** none
+ - **Expected inputs:** Implemented change or target screens; supported-environment list.
+ - **Required outputs:** Standard Agent Result Format; accessibility findings with remediation.
+ - **Upstream handoff:** Implementation agents.
+-- **Downstream handoff:** `futuro-reality-checker`.
++- **Downstream handoff:** `futuro-evidence-collector`.
+ - **Escalation conditions:** Blocking accessibility defects; cannot verify on required environments.
+ - **Approval requirements:** Owner approval to apply any remediation.
+ - **Completion criteria:** Evidence-based accessibility report delivered; regressions flagged.
+@@ -257,14 +316,17 @@
+ - **Authority:** Findings and severity only; independent of implementers.
+ - **Owned decisions:** Security findings, severity, remediation recommendations.
+ - **Prohibited decisions:** Applying fixes; deploying; rotating credentials; any gated action.
+-- **Allowed tools:** Read, Grep, Glob; WebSearch/WebFetch; read-only git inspection.
+-- **Disallowed tools:** Edit, Write, browser-drive, deploy, DB/Supabase, credentials, messaging, git state-changes, MCP, memory.
++- **Allowed tools (installed frontmatter):** Read, Grep, Glob.
++- **Disallowed tools:** Edit, Write, Bash, WebSearch, WebFetch, browser
++  automation, agent-executed Git, deploy, DB/Supabase, credentials, messaging,
++  MCP, memory.
+ - **Model:** opus
+ - **Memory:** none
+ - **Expected inputs:** Change under review; repository context.
+ - **Required outputs:** Standard Agent Result Format; CWE-mapped findings with severity.
+ - **Upstream handoff:** Implementation agents.
+-- **Downstream handoff:** `futuro-secrets-hygiene-auditor` / `futuro-reality-checker`.
++- **Downstream handoff:** `futuro-secrets-hygiene-auditor` /
++  `futuro-evidence-collector`.
+ - **Escalation conditions:** High-severity findings; suspected secret exposure.
+ - **Approval requirements:** Owner approval to apply any fix.
+ - **Completion criteria:** Independent security review complete; unresolved high-severity items block readiness.
+@@ -279,14 +341,16 @@
+ - **Authority:** Findings and rotation *recommendations* only.
+ - **Owned decisions:** Secret-exposure findings, remediation and rotation recommendations.
+ - **Prohibited decisions:** Creating, rotating, or revoking credentials; committing secret changes; any gated action.
+-- **Allowed tools:** Read, Grep, Glob; WebSearch/WebFetch; read-only git inspection.
+-- **Disallowed tools:** Edit, Write, **credential operations**, deploy, DB/Supabase, messaging, git state-changes, MCP, memory.
++- **Allowed tools (installed frontmatter):** Read, Grep, Glob.
++- **Disallowed tools:** Edit, Write, Bash, WebSearch, WebFetch, browser
++  automation, agent-executed Git, **credential operations**, deploy,
++  DB/Supabase, messaging, MCP, memory.
+ - **Model:** opus
+ - **Memory:** none
+ - **Expected inputs:** Change under review; repository and config surfaces (non-secret).
+ - **Required outputs:** Standard Agent Result Format; redacted findings and rotation plan recommendation.
+ - **Upstream handoff:** `futuro-security-code-auditor`.
+-- **Downstream handoff:** `futuro-reality-checker` / owner.
++- **Downstream handoff:** `futuro-evidence-collector` / owner.
+ - **Escalation conditions:** Any confirmed or suspected live secret exposure.
+ - **Approval requirements:** Owner performs all credential creation/rotation/revocation.
+ - **Completion criteria:** Redacted findings and a rotation recommendation delivered; nothing rotated by the agent.
+@@ -296,63 +360,76 @@
+ - **Canonical identifier:** `futuro-test-harness-engineer`
+ - **Display name:** Futuro Test Harness Engineer
+ - **Source third-party agent:** `testing-test-automation-engineer.md`
+-- **Purpose:** Author and run tests with resilient, isolated test data; report honest results.
++- **Purpose:** Author approved tests and specify execution; report honest evidence.
+ - **Agent class:** Testing
+-- **Authority:** Create/execute tests; edit test files only.
+-- **Owned decisions:** Test design, coverage approach, execution.
++- **Authority:** Create or edit approved test files only; no test execution.
++- **Owned decisions:** Test design, coverage approach, and execution specification.
+ - **Prohibited decisions:** Using production DB/data; editing application source; any gated action.
+-- **Allowed tools:** Read, Grep, Glob; Edit, Write (test files only); browser-drive; read-only git inspection.
+-- **Disallowed tools:** Production DB/Supabase, deploy, credentials, messaging, git state-changes, source edits, MCP, memory.
++- **Allowed tools (installed frontmatter):** Read, Grep, Glob, Edit, Write.
++- **Disallowed tools:** Bash, WebSearch, WebFetch, browser automation,
++  agent-executed Git, execution of tests/commands/servers, production
++  DB/Supabase, deploy, credentials, messaging, application-source edits, MCP,
++  memory.
++- **Write scope (binding):** technical access is limited to in-repository,
++  non-protected files. The owner-approved test-file list is an additional,
++  narrower procedural limit. Only one implementation writer operates on a
++  task. This agent may author approved test files but cannot execute tests.
+ - **Model:** sonnet
+ - **Memory:** none
+ - **Expected inputs:** Implemented change; acceptance criteria; environment targets.
+-- **Required outputs:** Standard Agent Result Format; test suite plus performed/not-performed results.
++- **Required outputs:** Standard Agent Result Format; tests, commands, and
++  evidence needs.
+ - **Upstream handoff:** Implementation agents.
+ - **Downstream handoff:** `futuro-evidence-collector`.
+ - **Escalation conditions:** Tests require production data/credentials; environment cannot be exercised.
+ - **Approval requirements:** Owner approval for anything touching production surfaces.
+-- **Completion criteria:** Tests authored and executed with honest, reproducible results and disclosed gaps.
++- **Completion criteria:** Tests authored; owner-run execution and gaps
++  labeled honestly.
+ 
+ ## 13. `futuro-evidence-collector`
+ 
+ - **Canonical identifier:** `futuro-evidence-collector`
+ - **Display name:** Futuro Evidence Collector
+ - **Source third-party agent:** `testing-evidence-collector.md`
+-- **Purpose:** Capture runtime and device evidence (screenshots, logs, reproducible steps) — no fantasy approvals.
++- **Purpose:** Organize static and owner-supplied runtime/device evidence.
+ - **Agent class:** Testing
+-- **Authority:** Observe and capture evidence; does not edit or certify.
+-- **Owned decisions:** What evidence to capture and how to reproduce it.
++- **Authority:** Inspect and organize available evidence; does not edit or certify.
++- **Owned decisions:** Evidence requirements, organization, and reproduction steps.
+ - **Prohibited decisions:** Certifying readiness; editing source; any gated action.
+-- **Allowed tools:** Read, Grep, Glob; browser-drive (screenshots/runtime capture); read-only git inspection.
+-- **Disallowed tools:** Edit, Write, deploy, DB/Supabase, credentials, messaging, git state-changes, MCP, memory.
++- **Allowed tools (installed frontmatter):** Read, Grep, Glob.
++- **Disallowed tools:** Edit, Write, Bash, WebSearch, WebFetch, browser
++  automation, agent-executed Git, deploy, DB/Supabase, credentials, messaging,
++  MCP, memory.
+ - **Model:** sonnet
+ - **Memory:** none
+ - **Expected inputs:** Implemented change; test results; environment list.
+-- **Required outputs:** Standard Agent Result Format; captured evidence with reproduction steps.
++- **Required outputs:** Standard Agent Result Format; labeled evidence bundle.
+ - **Upstream handoff:** `futuro-test-harness-engineer` / implementation agents.
+ - **Downstream handoff:** `futuro-reality-checker`.
+ - **Escalation conditions:** Evidence cannot be captured on required environments.
+ - **Approval requirements:** None for capture; certification is not this agent's role.
+-- **Completion criteria:** Verifiable evidence with reproduction steps delivered; no unproven claims.
++- **Completion criteria:** Labeled evidence and reproduction steps delivered.
+ 
+ ## 14. `futuro-reality-checker`
+ 
+ - **Canonical identifier:** `futuro-reality-checker`
+ - **Display name:** Futuro Reality Checker
+ - **Source third-party agent:** `testing-reality-checker.md`
+-- **Purpose:** Provide the independent, evidence-based production-readiness verdict — defaults to "needs work" without overwhelming proof.
++- **Purpose:** Provide an independent evidence-based readiness verdict.
+ - **Agent class:** Auditor / Release-gate
+ - **Authority:** Independent readiness verdict; cannot override the owner.
+ - **Owned decisions:** Readiness verdict based on evidence.
+ - **Prohibited decisions:** Overriding the owner; deploying; any gated action; certifying its own implementation work (it does none).
+-- **Allowed tools:** Read, Grep, Glob; browser-drive; read-only git inspection.
+-- **Disallowed tools:** Edit, Write, deploy, DB/Supabase, credentials, messaging, git state-changes, MCP, memory.
++- **Allowed tools (installed frontmatter):** Read, Grep, Glob.
++- **Disallowed tools:** Edit, Write, Bash, WebSearch, WebFetch, browser
++  automation, agent-executed Git, deploy, DB/Supabase, credentials, messaging,
++  MCP, memory.
+ - **Model:** opus
+ - **Memory:** none
+ - **Expected inputs:** Evidence bundle, test results, audit findings — from agents other than the implementer.
+ - **Required outputs:** Standard Agent Result Format; readiness verdict with justification.
+ - **Upstream handoff:** `futuro-evidence-collector` / auditors.
+-- **Downstream handoff:** `futuro-release-steward` / owner.
++- **Downstream handoff:** `futuro-release-steward` / owner final authority.
+ - **Escalation conditions:** Insufficient evidence; unresolved high-severity findings; environment gaps.
+ - **Approval requirements:** Owner is the final authority; this agent gates, it does not release.
+ - **Completion criteria:** Independent verdict issued with cited evidence; readiness blocked if proof is insufficient.
+@@ -367,8 +444,10 @@
+ - **Authority:** Prepare and summarize; the owner is the final release gate.
+ - **Owned decisions:** Release checklist contents, rollback plan, gate summary.
+ - **Prohibited decisions:** Actual deploy, commit, push, pull, checkout, merge, DB mutation, credential ops; any gated action.
+-- **Allowed tools:** Read, Grep, Glob; read-only git inspection; WebSearch/WebFetch.
+-- **Disallowed tools:** Edit, Write, **autonomous deploy/commit/push/merge**, DB/Supabase, credentials, messaging, MCP, memory.
++- **Allowed tools (installed frontmatter):** Read, Grep, Glob.
++- **Disallowed tools:** Edit, Write, Bash, WebSearch, WebFetch, browser
++  automation, agent-executed Git, **autonomous deploy/commit/push/merge**,
++  DB/Supabase, credentials, messaging, MCP, memory.
+ - **Model:** sonnet
+ - **Memory:** none
+ - **Expected inputs:** Reality-checker verdict; evidence bundle; rollback notes.
+--- a/.claude/FUTURO-AGENT-GOVERNANCE.md
++++ b/.claude/FUTURO-AGENT-GOVERNANCE.md
+@@ -56,13 +56,14 @@
+ | **Architecture** | System / data design and trade-offs | No (design only) | No |
+ | **Implementation** | Scoped code changes | Yes (approved scope) | No (cannot certify own work) |
+ | **Auditor** | Independent security, secrets, accessibility, reality review | No | Findings only; reality-checker gives independent verdict |
+-| **Testing** | Test authoring, execution, evidence capture | Tests only / no source | No |
++| **Testing** | Test design / evidence | Approved test files only | No |
+ | **Release** | Release checklist, rollback, gate summary | No | Summarizes; owner is final gate |
+ 
+ ## 7. Planning-Agent Rules
+ 
+ - Produce scope proposals, task decomposition, sequencing, and workflow trees.
+-- Read-only with respect to source; may use research tools where assigned.
++- Read-only with respect to source: `Read`, `Grep`, `Glob` only. No installed
++  planning agent performs web research, browser automation, or Git execution.
+ - Never edit application code, change git state, or perform any gated action.
+ 
+ ## 8. Implementation-Agent Rules
+@@ -70,8 +71,10 @@
+ - Edit only files within the explicitly approved task scope.
+ - Apply the smallest verified change; no broad refactoring; no unrelated files.
+ - Do not hide layout defects with blanket overflow suppression.
+-- No autonomous git state changes, deployment, database mutation, or credential/dependency actions.
+-- Hand finished work to Testing/Auditor classes; cannot certify own change.
++- No Git execution, deployment, database mutation, credential action, or
++  dependency action through the named-agent path.
++- Recommend owner routing to Testing/Auditor classes; an implementer cannot
++  certify its own change.
+ 
+ ## 9. Independent-Auditor Rules
+ 
+@@ -82,37 +85,48 @@
+ 
+ ## 10. Testing-Agent Rules
+ 
+-- Author and run tests; capture runtime and device evidence.
++- `futuro-test-harness-engineer` authors approved test files and specifies
++  exact owner-run commands; it cannot execute tests, commands, or servers.
++- `futuro-evidence-collector` organizes static evidence and owner-supplied
++  runtime, console, DOM, device, and test-log material.
+ - Never use production databases or production credentials for testing.
+-- Distinguish tests performed from tests not performed; never overstate coverage.
++- Distinguish checks performed from checks not performed; never overstate
++  coverage or relabel owner-supplied evidence as independently reproduced.
+ 
+ ## 11. Release-Agent Rules
+ 
++- Receive the Reality Checker verdict and its associated evidence bundle.
+ - Assemble the release checklist, rollback plan, and gate summary.
+-- **Do not** perform the deploy, commit, push, or merge — present the summary to the owner, who is the
+-  final gate.
++- **Do not** deploy, commit, push, or merge. Present the package to the owner,
++  who remains the final gate.
+ 
+ ## 12. Tool-Access Rules
+ 
+-- Each active agent definition (created later) must declare an **explicit minimum `tools:` allowlist** —
+-  least privilege. No agent receives more tools than its class requires.
+-- Read-only classes (Planning, Architecture, Auditor) receive read/search tools and reporting only — no
+-  Edit/Write.
+-- Implementation agents receive Edit/Write scoped to approved files, plus read/search.
+-- Testing/evidence agents receive read/search, scoped test editing where applicable, and browser-driving
+-  for runtime evidence.
+-- No agent receives tools that can commit, push, pull, checkout, merge, deploy, mutate Supabase, modify
+-  production data, rotate credentials, install dependencies, send communications, or delete data.
++- Each of the 15 installed definitions declares an **explicit minimum
++  `tools:` allowlist**.
++- Eleven read-only definitions declare `Read, Grep, Glob`.
++- Four definitions declare `Read, Grep, Glob, Edit, Write`:
++  `futuro-vanilla-ui-engineer`, `futuro-pwa-mobile-engineer`,
++  `futuro-minimal-change-engineer`, and `futuro-test-harness-engineer`.
++- No installed frontmatter declares Bash, WebSearch, WebFetch, browser
++  automation, MCP, or agent-executed Git.
++- The PreToolUse hook restricts further: Bash is denied unconditionally, and
++  Edit/Write/NotebookEdit are denied against protected surfaces (§37).
++- No named-agent path can commit, push, pull, checkout, merge, deploy, mutate
++  Supabase, modify production data, rotate credentials, install dependencies,
++  send communications, or delete data.
+ 
+ ## 13. MCP Default-Deny Policy
+ 
+-- **MCP is default-deny for every project subagent.** During the initial pilot, no project subagent
+-  receives any MCP tools.
+-- Supabase (and all other MCP servers) remain with the **owner-controlled main session** unless separately
+-  approved later.
+-- When active agent definitions are created later, this must be **enforced through explicit minimum
+-  `tools:` allowlists** that simply omit MCP tools. **Do not rely on undocumented wildcard MCP syntax** to
+-  grant or deny MCP access.
++- **Agent definitions grant no MCP tools.** None of the 15 installed
++  definitions declares MCP authority.
++- Supabase and other MCP servers remain with the **owner-controlled main
++  session** unless separately approved later.
++- Explicit minimum frontmatter allowlists are the documented grant boundary.
++  Current settings and hook enforcement restrict further; P1 does not rely
++  on one wildcard setting as the sole MCP control.
++- §42 records the MCP-specific allow entries in `settings.local.json` as
++  stale or unreachable and leaves P1-006 deferred.
+ 
+ ## 14. Memory Policy
+ 
+@@ -124,12 +138,16 @@
+ 
+ ## 15. Source-Control Rules
+ 
+-- No autonomous `commit`, `push`, `pull`, `checkout`, or `merge`.
+-- `git add` limited to explicitly approved files; adding out-of-scope files requires owner approval.
+-- **Forced tracking is prohibited:** `git add -f` — or any other mechanism that force-tracks
+-  `CLAUDE.md` or anything under `.claude/` — is not allowed unless the owner provides explicit approval.
+-- Do not edit `.gitignore`, `.git/info/exclude`, or other ignore/exclude configuration without approval.
+-- Read-only git inspection (`status`, `fetch`, `check-ignore`, `ls-remote`, `rev-list`) is permitted.
++- No named agent can execute `commit`, `push`, `pull`, `checkout`, `merge`,
++  `git add`, or any other Git command.
++- Git evidence, including `status`, `fetch`, `check-ignore`, `ls-remote`,
++  `rev-list`, `log`, and `diff`, is owner-supplied or supplied by another
++  independently authorized source.
++- **Forced tracking is prohibited:** `git add -f` or any equivalent mechanism
++  that force-tracks `CLAUDE.md` or `.claude/**` requires explicit owner
++  approval and owner-side execution.
++- Do not edit `.gitignore`, `.git/info/exclude`, or other ignore/exclude
++  configuration without approval.
+ 
+ ## 16. Deployment Rules
+ 
+@@ -170,15 +188,21 @@
+ 
+ ## 22. Runtime Verification Requirements
+ 
+-- Verify behavior at runtime, not only through static inspection.
+-- Provide reproducible steps and observed results as evidence.
++- Runtime claims require runtime evidence; static inspection alone is not
++  runtime verification.
++- The owner or another independently authorized source performs required
++  runtime checks and supplies reproducible steps and observed results.
++- Owner-supplied results remain labeled owner-supplied (§38).
+ 
+ ## 23. Mobile & PWA Verification Requirements
+ 
+-- Mobile/PWA changes must be verified across the six priority environments (iPhone Safari, iPhone
+-  standalone PWA, Chrome on iPhone, Android Chrome, desktop Chrome, Microsoft Edge), in both signed-out and
+-  authenticated states.
+-- Static source inspection and desktop emulation alone **cannot** certify physical-device behavior.
++- Mobile/PWA changes require evidence across the six priority environments:
++  iPhone Safari, iPhone standalone PWA, Chrome on iPhone, Android Chrome,
++  desktop Chrome, and Microsoft Edge, signed out and authenticated.
++- Static source inspection and desktop emulation alone **cannot** certify
++  physical-device behavior.
++- Runtime/device evidence must be owner-supplied or supplied by another
++  independently authorized source (§38).
+ 
+ ## 24. Evidence Standards
+ 
+@@ -214,10 +238,39 @@
+ - Rollback readiness (how to revert, and verification that revert restores prior behavior) is part of the
+   release gate.
+ 
+-## 30. Standard Handoff Format
+-
+-Each handoff between agents states: what was done, evidence produced, files touched (and not touched),
+-open risks/assumptions, what the next agent must verify, and what still requires owner approval.
++## 30. Standard Structured Handoff Contract
++
++This is the **canonical** handoff contract. It supplements, and does not
++replace, the 14-field Standard Agent Result Format in §43. The Matrix
++references this contract rather than duplicating it. The owner transfers the
++contract manually; it does not invoke the recommended next agent (§36).
++
++Every handoff contains these 17 fields in this exact order:
++
++1. **Handoff ID**
++2. **Source agent**
++3. **Recommended next agent**
++4. **Owner-approved task and file scope**
++5. **Evidence inspected**
++6. **Work completed**
++7. **Files changed**
++8. **Files not changed**
++9. **Tests or checks performed**
++10. **Tests or checks not performed**
++11. **Findings and unresolved risks**
++12. **Required owner-run actions**
++13. **Required downstream verification**
++14. **Readiness status**
++15. **Approval required**
++16. **Confidence**
++17. **Evidence-source labels**
++
++Field 17 uses only these labels, applied per evidence item:
++
++- **Directly inspected**
++- **Owner-supplied**
++- **Agent-reported**
++- **Unavailable**
+ 
+ ## 31. Standard Completion Criteria
+ 
+@@ -248,8 +301,12 @@
+ - public publishing · irreversible automation
+ - broad refactoring · changes outside the approved task scope
+ - forced tracking (`git add -f` or equivalent) of `CLAUDE.md` or anything under `.claude/`
+-- manual local-directory Netlify deployment that could include locally excluded Claude configuration,
+-  governance, backup, settings, or agent files
++- manual local-directory Netlify deployment that could include locally
++  excluded Claude configuration, governance, backup, settings, or agent files
++
++Approval governs whether the owner should proceed. It does not bypass the
++PreToolUse hook. Protected-governance changes require owner-side manual
++application outside the agent Edit/Write/NotebookEdit path (§37).
+ 
+ ## 34. Approval Vocabulary
+ 
+@@ -295,9 +352,21 @@
+ 
+ ### 34.3 Ambiguity Rule
+ 
+-**Ambiguous wording must not be interpreted as approval.** Phrases such as "looks good", "go ahead",
+-"sounds right", "ok", or silence are **not** approval verbs. If the owner's intent is not expressed as one
+-of the exact verbs in §34, ask for the explicit verb before acting.
++**Ambiguous wording must not be interpreted as approval.** Phrases such as
++"looks good", "go ahead", "sounds right", "ok", or silence are **not**
++approval verbs. If the owner's intent is not expressed as one of the exact
++verbs in §34, ask for the explicit verb before acting.
++
++### 34.4 Approval Does Not Bypass the Hook
++
++Approval under §34 authorizes the **owner** to proceed within the approved
++scope. It is a governance decision, not a technical override.
++
++No approval phrase, prompt response, or agent-session state bypasses the
++current PreToolUse hook. Changes to `.claude/**`, `CLAUDE.md`, `.gitignore`,
++`.gitattributes`, or `.git/**` must be made manually by the owner outside the
++agent Edit/Write/NotebookEdit path. No autonomous protected-surface edit path
++exists.
+ 
+ ## 35. Approval Dependencies
+ 
+@@ -315,12 +384,147 @@
+ - **Production verification is separate from merge approval.** `APPROVED TO MERGE` never implies
+   `APPROVED TO VERIFY PRODUCTION`.
+ - **Branch cleanup follows recorded production verification** unless the owner explicitly waives that order.
+-- **Agents may not modify their own definitions without `APPROVED TO MODIFY AGENTS`.** This covers agent
+-  definition files, `.claude/**`, and this governance document.
++- **Agents may not modify their own definitions without
++  `APPROVED TO MODIFY AGENTS`.** This covers agent definition files,
++  `.claude/**`, and this governance document.
++
++## 36. Current P1 Operating Mode
++
++- P1/manual-only mode is active.
++- Autonomous orchestration and agent-to-agent delegation are disabled.
++- The owner manually launches each installed agent and manually transfers
++  every handoff.
++- A downstream agent named in a definition or Matrix entry is an owner-routing
++  recommendation, not an autonomous invocation.
++- Task-management records, where available, may track work. They do not
++  authorize agent execution, delegation, or background orchestration.
++- Only one Edit/Write-capable implementation writer operates on a task at a
++  time.
++- This mode remains active until a separately reviewed and approved
++  orchestration phase explicitly changes it.
++
++## 37. Declared Versus Effective Authority
++
++Five layers can restrict what an agent may do:
++
++1. Agent frontmatter `tools:` declarations.
++2. Project settings in `.claude/settings.local.json`.
++3. User-level settings, where applicable.
++4. The PreToolUse hook.
++5. Procedural owner-approved task and file scope.
++
++**The narrowest effective restriction governs.**
++
++Current enforcement includes:
++
++- Bash is denied unconditionally by the hook.
++- Edit, Write, and NotebookEdit are denied for targets not proven inside the
++  repository and for protected surfaces: `.claude/**`, `CLAUDE.md`,
++  `.gitignore`, `.gitattributes`, and `.git/**`.
++- No approval phrase, prompt response, or agent-session state changes that
++  hook decision.
++
++Consequences:
++
++- Approved protected-governance edits must be performed manually by the owner
++  outside the agent Edit/Write/NotebookEdit path.
++- The `settings.local.json` `ask` entries for `.claude/**`, `CLAUDE.md`, and
++  `.gitignore` are currently inert beneath the harder hook denial.
++- Approval governs whether the owner should proceed; it does not bypass the
++  hook or create an autonomous protected-surface path.
++
++## 38. Execution and Evidence Authority
++
++The current named-agent path cannot independently execute:
++
++- Git or shell commands
++- Tests, servers, builds, or linters
++- Browser automation or physical-device checks
++- WebSearch or WebFetch research
++- MCP calls
++- Deployments
++- Database mutations or other live-service actions
++
++Agents may inspect static repository evidence through their declared tools.
++When external execution is required, the owner or another independently
++authorized source performs it and supplies the result.
++
++Every evidence item uses one of these labels:
++
++- **Directly inspected:** read by the agent from an available source.
++- **Owner-supplied:** supplied by the owner from an unavailable execution path.
++- **Agent-reported:** claimed by another agent but not independently verified.
++- **Unavailable:** required evidence not available in the current session.
++
++Owner-supplied or agent-reported evidence must not be described as independently
++reproduced.
++
++## 39. Write Scope: Technical Versus Procedural
++
++Two restrictions apply to the four Edit/Write-capable agents:
++
++- **Technically enforced scope:** in-repository, non-protected files allowed by
++  the hook.
++- **Procedural scope:** the exact owner-approved task and file list.
++
++Both restrictions are binding. Procedural scope may be narrower than technical
++scope. An agent stops before touching a technically allowed file that is not
++included in the owner-approved scope.
++
++`futuro-test-harness-engineer` may author approved test files only. It cannot
++execute tests, commands, or servers.
++
++## 40. Independent Verification Chain
++
++The minimum chain is:
++
++1. Planning or architecture.
++2. Owner-approved implementation.
++3. Applicable independent audit and/or test design.
++4. Evidence collection.
++5. Reality Checker verdict.
++6. Release Steward review.
++7. Owner final decision.
++
++An implementation agent must not route its own change directly to the Reality
++Checker without intervening independent evidence, audit, or test design.
++
++A proposal or implementation must not route directly to the Release Steward.
++The Release Steward receives the Reality Checker verdict and its evidence
++bundle.
++
++The owner remains final authority for merge, push, deployment, release,
++production, credentials, protected governance, database actions, and
++destructive actions.
++
++## 41. Development Versus Production Readiness
++
++- Static inspection supports only claims proven by static evidence.
++- Owner-supplied runtime results remain labeled owner-supplied.
++- Desktop or static evidence cannot certify physical-device behavior.
++- Development readiness is **not** production certification.
++- Production certification requires evidence appropriate to the specific
++  production claim and the owner's final authority.
++
++## 42. P1-006 and P1-007 Deferred Configuration
++
++- **P1-006:** MCP-specific entries under `settings.local.json`
++  `permissions.allow` are stale or unreachable under current effective MCP
++  enforcement.
++- **P1-007:** Bash-specific entries under `settings.local.json`
++  `permissions.allow` are stale, dead, or unreachable beneath the blanket
++  Bash denial and current hook.
++
++Both items are **recorded, not resolved**, by P1-B2:
++
++- Neither set of entries is removed.
++- Both remain deferred.
++- Neither may be represented as available agent authority.
++- No future cleanup of `settings.local.json` is authorized here.
+ 
+ ---
+ 
+-## Standard Agent Result Format
++## 43. Standard Agent Result Format
+ 
+ Every agent must return results in this exact 14-field format:
+ 
+@@ -338,3 +542,7 @@
+ 12. **Approval required**
+ 13. **Handoff**
+ 14. **Confidence**
++
++This 14-field result format is supplemented, not replaced, by the canonical
++17-field structured handoff contract in §30 when work transfers to another
++agent.

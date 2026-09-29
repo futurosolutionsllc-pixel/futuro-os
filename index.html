@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Futuro OS — Solo Edition</title>
+<title>Futuro_OS</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1119,7 +1119,7 @@ function _syncRecoveryUi() {
 // ===== GOVCON STATE (schema v3 — every key optional; older v2 saves load untouched) =====
 let GC_OPPS=[], GC_PROP=[], GC_AWARDS=[], GC_CONTRACTS=[], GC_TOS=[], GC_PERF=[];
 let GC_PROFILE={
-  org:'Futuro Solutions LLC', dba:'Futuro Transport',
+  org:'Futuro Solutions LLC', dba:'',
   uei:'MNPPDKK6MGV1', cage:'12H59', ein:'33-1411663',
   naicsPrimary:'492110',
   naics:['492110','492210','484110','484220','488510','561431','561110'],
@@ -1919,7 +1919,7 @@ function callLead(){ if(sel&&sel.ph) window.location.href='tel:'+sel.ph.replace(
 function emailLead(){ if(sel&&sel.em) window.location.href='mailto:'+sel.em; else alert('No email on this lead.'); }
 
 // ============================================================
-// WEBSITE INBOX (Stage 6 — funnel from futurotransport.com)
+// WEBSITE INBOX (Stage 6 — funnel from the public website; futurotransport.com retired, D-28)
 // Reads new inquiries from the public "inbound_leads" table.
 // Accept -> creates a real CRM lead; Dismiss -> marks handled.
 // ============================================================
@@ -1952,7 +1952,7 @@ function rInbox(){
     c.innerHTML=`<div class="card" style="padding:48px 24px;text-align:center">
       <div style="width:54px;height:54px;border-radius:50%;background:var(--bg4);display:grid;place-items:center;margin:0 auto 16px;font-size:24px;color:var(--t3)"><i class="ti ti-inbox"></i></div>
       <div style="font-size:15px;font-weight:600;color:var(--t1);margin-bottom:6px">Inbox is empty</div>
-      <div style="font-size:12px;color:var(--t3);max-width:340px;margin:0 auto">New shipper inquiries from futurotransport.com will appear here for you to review and add to your pipeline.</div>
+      <div style="font-size:12px;color:var(--t3);max-width:340px;margin:0 auto">New inquiries from the website will appear here for you to review and add to your pipeline.</div>
       <button class="btn" style="margin-top:18px" onclick="fetchInbox()"><i class="ti ti-refresh"></i> Refresh</button>
     </div>`;
     return;
@@ -5961,7 +5961,7 @@ syncAllScores(); // compute live Fit Scores from current data
 ctMigrate(); // Control Tower schema v2: default-fill jobs, seed demo data on first run
 // Update logo name if org settings were saved
 const _logoEl = document.querySelector('.logo-name');
-if (_logoEl) _logoEl.textContent = 'Futuro OS'; // product brand is fixed; company name lives in orgSettings for documents
+if (_logoEl) _logoEl.textContent = 'Futuro_OS'; // product brand is fixed; company name lives in orgSettings for documents
 // keyboard access for dynamically rendered clickable rows/cards
 const _contentEl = document.getElementById('content');
 if (_contentEl) new MutationObserver(()=>enhanceA11y()).observe(_contentEl,{childList:true,subtree:true});
@@ -5992,7 +5992,7 @@ if (_cloudWritable && !_crmLocked && !orgSettings.tutorialSeen) {
 }; // end __ffInit — runs only after successful login
 
 // ============================================================================
-// GOVCON WORKSPACE  (Futuro Solutions pre-award → Futuro Transport execution)
+// GOVCON WORKSPACE  (pre-award → execution; single brand Futuro Solutions LLC, D-28)
 //   Consolidation phases C–F. Shares Futuro OS persistence (snapshot),
 //   navigation, modal/toast, audit log, GOVCONTACTS (relationships) and JOBS.
 //   Honest labeling: ALL scoring here is deterministic/rules-based — no LLM.

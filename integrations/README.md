@@ -1,3 +1,5 @@
+> **NOTE 2026-09-27:** futurotransport.com is a retired trade-name domain (Command Center D-28) and now redirects to futurosolutions.net. The `carrier-signup-form.html` ("Haul with us") served the retired brand and is retired with it; only the futurosolutions.net inquiry form remains in use. Diagram and table below kept as written for reference.
+
 # Connecting your websites to Futuro OS
 
 Everything flows through one Supabase project. Website inquiry forms post into the

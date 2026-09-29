@@ -1,4 +1,4 @@
-# Futuro OS
+# Futuro_OS
 
 Two apps, one brand, one Supabase backend:
 
@@ -10,7 +10,7 @@ Two apps, one brand, one Supabase backend:
 The desktop sidebar links to Mobile Ops; the mobile Settings sheet links back to desktop.
 
 **Website funnel:** `integrations/` holds drop-in inquiry forms for futurosolutions.net
-and futurotransport.com that post straight into the shared Supabase — inquiries appear
+(futurotransport.com is a retired trade-name domain — Command Center D-28 — and redirects there) that post straight into the shared Supabase — inquiries appear
 in the desktop Portal Inbox and the mobile Biz → Website inbox. See `integrations/README.md`.
 
 ## Running it

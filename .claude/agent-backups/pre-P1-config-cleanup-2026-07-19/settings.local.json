@@ -1,0 +1,61 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -d \"D:/FUTURO_OS\"/* 2>/dev/null | head -30)",
+      "Bash(cd \"D:/FUTURO_OS\" && find . -maxdepth 4 -iname \"*command*center*\" -o -maxdepth 4 -iname \"*COMMAND_CENTER*\" 2>/dev/null | head -20)",
+      "Bash(rg --pcre2 -n '\\\\$\\\\{\\(?!esc\\\\\\(\\)\\(?!\\\\w+\\\\\\(\\\\\\)\\)[a-zA-Z_$][\\\\w$]*\\\\.\\(co|nm|customerName|contactName|title|notes|company|name|message|email|em|ph|lane|agency|summary|sol|city|sta|ind\\)\\\\}' index.html)",
+      "mcp__14f79770-6062-459e-856b-b6e519722501__list_projects",
+      "mcp__14f79770-6062-459e-856b-b6e519722501__list_migrations",
+      "mcp__14f79770-6062-459e-856b-b6e519722501__list_edge_functions",
+      "Bash(git check-ignore *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(git status *)",
+      "Bash(node syntax-check.js \"D:/FUTURO_OS/16_PROJECTS/Claude_Code/FuturoFreight/index.html\")",
+      "Bash(grep -vE \"^\\\\+\\\\s*\\(//|/\\\\*|\\\\*\\)\")",
+      "Bash(grep -vE \"^\\\\+\\\\s*$\")",
+      "Bash(node \"C:/Users/Jonnie/AppData/Local/Temp/claude/D--FUTURO-OS-16-PROJECTS-Claude-Code-FuturoFreight/ef2b6074-8634-4b77-b0b9-0b4b7285bb9d/scratchpad/p0a/syntax-check.js\" index.html)",
+      "Bash(git ls-remote *)",
+      "Bash(awk '{print $1}')",
+      "Bash(set -e)",
+      "Bash(git fetch *)",
+      "Bash(git rev-list *)",
+      "Bash(curl -sI http://127.0.0.1:8788/mobile/index.html)",
+      "Bash(curl -sI http://127.0.0.1:8788/mobile/manifest.webmanifest)",
+      "Bash(curl -sI http://127.0.0.1:8788/mobile/sw.js)"
+    ],
+    "deny": [
+      "Edit(/.claude/agent-backups/**)",
+      "Edit(/.git/**)",
+      "Bash(git add -A*)",
+      "Bash(git add --all*)",
+      "Bash(git add -f*)",
+      "Bash(git add --force*)",
+      "Bash(git add .)",
+      "Bash(git add ./)",
+      "Bash(git add .claude*)",
+      "Bash(git add ./.claude*)",
+      "Bash(git add CLAUDE.md*)",
+      "Bash(git add ./CLAUDE.md*)",
+      "Bash(git add .gitignore*)",
+      "Bash(git add ./.gitignore*)"
+    ],
+    "ask": [
+      "Edit(/.claude/**)",
+      "Edit(/CLAUDE.md)",
+      "Edit(/.gitignore)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/protect-governance-surfaces.js\""
+          }
+        ]
+      }
+    ]
+  }
+}
