@@ -36,7 +36,7 @@ const crypto = require('crypto');
 
 const repo = process.argv[2] || process.cwd();
 const indexPath = path.join(repo, 'index.html');
-const fixturePath = path.join(repo, 'tests', '.fixtures', 'protected-hashes-5b20c8d.json');
+const fixturePath = path.join(repo, 'tests', '.fixtures', 'protected-hashes-18d8905.json');
 
 const src = fs.readFileSync(indexPath, 'utf8');
 const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
